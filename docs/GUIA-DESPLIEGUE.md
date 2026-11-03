@@ -149,6 +149,7 @@ Sin `AUTH_GOOGLE_ID`, el botón «Continuar con Google» no aparece. Si alguien 
 | Login con Google: «acceso bloqueado» o «app no verificada» | La pantalla de consentimiento está en modo Prueba y tu correo no está en **Usuarios de prueba**, o falta **Publicar app**. |
 | El análisis dice «límite gratuito» | Se agotó la cuota por minuto o día de Gemini: espera, cambia `GEMINI_MODEL` o configura `GROQ_API_KEY` como respaldo. |
 | «Llegaste al límite de N análisis por día» | Es el límite propio de la app: sube `DAILY_ANALYSIS_LIMIT` o espera al día siguiente (zona `APP_TIMEZONE`). |
+| `prisma db push`: `Connection url is empty` | La CLI no encontró `DIRECT_URL`/`DATABASE_URL`. Deben estar en `.env.local` o `.env` en la raíz del proyecto (`prisma.config.ts` carga ambos). |
 | Error `column ... does not exist` | La BD es de una versión anterior: ejecuta `npx prisma db push`. |
 | El enlace público muestra «no encontrado» | El análisis se borró o se dejó de compartir; crea un enlace nuevo. |
 | El análisis tarda más de 60 s | Reduce el código o baja `LLM_CHUNK_LINES`; las rutas tienen `maxDuration = 60`. |
