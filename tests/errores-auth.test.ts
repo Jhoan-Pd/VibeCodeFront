@@ -11,7 +11,9 @@ describe("mensajeErrorAuth", () => {
   });
   it("traduce los errores conocidos y da un mensaje genérico al resto", () => {
     expect(mensajeErrorAuth("CredentialsSignin")).toBe("Correo o contraseña incorrectos.");
-    expect(mensajeErrorAuth("OAuthSignin")).toContain("GitHub");
+    expect(mensajeErrorAuth("OAuthSignin")).toContain("Google o GitHub");
+    expect(mensajeErrorAuth("CorreoNoVerificado")).toContain("verifica el correo");
+    expect(mensajeErrorAuth("BaseNoDisponible")).toContain("base de datos no responde");
     expect(mensajeErrorAuth("<script>")).toBe("No se pudo iniciar sesión. Inténtalo de nuevo.");
   });
 });
