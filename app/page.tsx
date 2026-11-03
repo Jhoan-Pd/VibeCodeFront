@@ -50,12 +50,13 @@ export default async function LandingPage() {
           <Badge variant="default" className="vd-enter gap-1.5" style={retraso(0, 75)}>
             <Sparkles className="size-3" /> Para el código que escribió la IA y tú no
           </Badge>
-          <h1 className="vd-title max-w-4xl text-5xl leading-[0.95] sm:text-6xl lg:text-[5.25rem]">
+          <h1 className="vd-title max-w-4xl text-[clamp(1.75rem,8.6vw,3rem)] leading-[1.02] sm:text-6xl sm:leading-[0.95] lg:text-[5.25rem]">
+            {/* Cada línea del título es una frase completa: así ninguna línea grande empieza en minúscula. */}
             <span className="vd-enter block" style={retraso(1, 75)}>
-              Deja de <PalabraCambiante palabras={["copiar", "pegar"]} /> código
+              Deja de <PalabraCambiante palabras={["copiar", "pegar"]} /> código.
             </span>
             <span className="vd-enter block text-primary" style={retraso(2, 75)}>
-              que no entiendes
+              Empieza a entenderlo.
             </span>
           </h1>
           <p className="vd-enter max-w-2xl text-lg text-muted-foreground" style={retraso(3, 75)}>
