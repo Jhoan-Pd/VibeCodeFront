@@ -10,14 +10,38 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Alert, Spinner } from "@/components/ui/misc";
 import { problemaCorreo } from "@/lib/correo";
+import { MENSAJE_BD_NO_DISPONIBLE } from "@/lib/errores-bd";
+import type { NombreProveedor } from "@/lib/oauth";
 
-function BotonGithub({ callbackUrl, habilitado }: { callbackUrl: string; habilitado: boolean }) {
-  if (!habilitado) return null;
+const ETIQUETA: Record<NombreProveedor, { texto: string; icono: React.ReactNode }> = {
+  // Marca neutra (una «G» con la tipografía de la app), no el logotipo de Google.
+  google: { texto: "Continuar con Google", icono: <span aria-hidden className="flex size-4 items-center justify-center rounded-full border text-[10px] font-bold">G</span> },
+  github: { texto: "Continuar con GitHub", icono: <Github /> },
+};
+
+/** Botones de Google/GitHub (solo los configurados en el servidor) y el separador «o con tu correo». */
+function BotonesOAuth({ proveedores, callbackUrl }: { proveedores: NombreProveedor[]; callbackUrl: string }) {
+  const [yendo, setYendo] = useState<NombreProveedor | null>(null);
+  if (proveedores.length === 0) return null;
   return (
     <>
-      <Button type="button" variant="outline" className="w-full" onClick={() => signIn("github", { redirectTo: callbackUrl })}>
-        <Github /> Continuar con GitHub
-      </Button>
+      <div className="space-y-2">
+        {proveedores.map((p) => (
+          <Button
+            key={p}
+            type="button"
+            variant="outline"
+            className="w-full"
+            disabled={yendo !== null}
+            onClick={() => {
+              setYendo(p);
+              void signIn(p, { redirectTo: callbackUrl });
+            }}
+          >
+            {yendo === p ? <Spinner /> : ETIQUETA[p].icono} {ETIQUETA[p].texto}
+          </Button>
+        ))}
+      </div>
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" /> o con tu correo <span className="h-px flex-1 bg-border" />
       </div>
@@ -25,7 +49,7 @@ function BotonGithub({ callbackUrl, habilitado }: { callbackUrl: string; habilit
   );
 }
 
-export function LoginForm({ callbackUrl, githubHabilitado }: { callbackUrl: string; githubHabilitado: boolean }) {
+export function LoginForm({ callbackUrl, proveedores }: { callbackUrl: string; proveedores: NombreProveedor[] }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +63,7 @@ export function LoginForm({ callbackUrl, githubHabilitado }: { callbackUrl: stri
     try {
       const res = await signIn("credentials", { email, password, redirect: false });
       if (!res || res.error) {
-        setError("Correo o contraseña incorrectos.");
+        setError(res?.code === "bd_no_disponible" ? MENSAJE_BD_NO_DISPONIBLE : "Correo o contraseña incorrectos.");
         return;
       }
       router.push(callbackUrl);
@@ -53,7 +77,7 @@ export function LoginForm({ callbackUrl, githubHabilitado }: { callbackUrl: stri
 
   return (
     <div className="space-y-4">
-      <BotonGithub callbackUrl={callbackUrl} habilitado={githubHabilitado} />
+      <BotonesOAuth callbackUrl={callbackUrl} proveedores={proveedores} />
       <form onSubmit={enviar} className="space-y-4" noValidate>
         {error && (
           <Alert key={error} variant="error" className="vd-shake">
@@ -82,7 +106,7 @@ export function LoginForm({ callbackUrl, githubHabilitado }: { callbackUrl: stri
   );
 }
 
-export function RegisterForm({ githubHabilitado }: { githubHabilitado: boolean }) {
+export function RegisterForm({ proveedores }: { proveedores: NombreProveedor[] }) {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -129,7 +153,7 @@ export function RegisterForm({ githubHabilitado }: { githubHabilitado: boolean }
 
   return (
     <div className="space-y-4">
-      <BotonGithub callbackUrl="/dashboard" habilitado={githubHabilitado} />
+      <BotonesOAuth callbackUrl="/dashboard" proveedores={proveedores} />
       <form onSubmit={enviar} className="space-y-4" noValidate>
         {error && (
           <Alert key={error} variant="error" className="vd-shake">

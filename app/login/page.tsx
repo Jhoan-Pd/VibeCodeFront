@@ -3,6 +3,7 @@ import { LoginForm } from "@/components/auth-forms";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/misc";
 import { mensajeErrorAuth } from "@/lib/errores-auth";
+import { proveedoresHabilitados } from "@/lib/oauth";
 import { rutaInternaSegura } from "@/lib/redirect";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -28,7 +29,7 @@ export default async function LoginPage({
             </Alert>
           )}
           {mensajeError && <Alert variant="error">{mensajeError}</Alert>}
-          <LoginForm callbackUrl={rutaInternaSegura(callbackUrl)} githubHabilitado={Boolean(process.env.AUTH_GITHUB_ID)} />
+          <LoginForm callbackUrl={rutaInternaSegura(callbackUrl)} proveedores={proveedoresHabilitados(process.env)} />
         </CardContent>
       </Card>
     </div>

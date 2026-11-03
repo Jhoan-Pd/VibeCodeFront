@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { RegisterForm } from "@/components/auth-forms";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { proveedoresHabilitados } from "@/lib/oauth";
 
 export const metadata: Metadata = { title: "Crear cuenta" };
 
@@ -13,7 +14,7 @@ export default function RegisterPage() {
           <CardDescription>Gratis. Guarda tus análisis y sigue tu progreso.</CardDescription>
         </CardHeader>
         <CardContent>
-          <RegisterForm githubHabilitado={Boolean(process.env.AUTH_GITHUB_ID)} />
+          <RegisterForm proveedores={proveedoresHabilitados(process.env)} />
         </CardContent>
       </Card>
     </div>
