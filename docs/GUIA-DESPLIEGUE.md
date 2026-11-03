@@ -1,4 +1,4 @@
-# Guía de despliegue: Gemini + Groq + Supabase (o Neon) + GitHub OAuth + Vercel
+# Guía de despliegue: Gemini + Groq + Supabase (o Neon) + GitHub y Google OAuth + Vercel
 
 Orden recomendado: 1) claves de IA, 2) base de datos, 3) probar en local, 4) GitHub (repo y OAuth), 5) Vercel.
 
@@ -79,6 +79,27 @@ GitHub → Settings → Developer settings → OAuth Apps → **New OAuth App**.
 
 Genera un **Client secret** en cada una. Local: `AUTH_GITHUB_ID` y `AUTH_GITHUB_SECRET` en `.env.local`. Producción: en Vercel.
 
+### Login con Google (OAuth 2.0)
+
+1. Ve a https://console.cloud.google.com, crea un proyecto (por ejemplo «VibeDecoder») y ábrelo.
+2. **APIs y servicios → Pantalla de consentimiento de OAuth** (o «Google Auth Platform → Branding»):
+   - Tipo de usuario: **Externo**.
+   - Nombre de la app, correo de soporte y correo de contacto del desarrollador.
+   - Permisos: los básicos (`openid`, `email`, `profile`). No hace falta enviar la app a verificación.
+   - Mientras esté en modo **Prueba**, solo pueden entrar los correos que agregues en **Usuarios de prueba**. Para abrirla a cualquiera, pulsa **Publicar app**.
+3. **Credenciales → Crear credenciales → ID de cliente de OAuth**, tipo **Aplicación web**:
+
+| Campo | Valores |
+|---|---|
+| Orígenes autorizados de JavaScript | `http://localhost:3000` y `https://TU-APP.vercel.app` |
+| URI de redireccionamiento autorizados | `http://localhost:3000/api/auth/callback/google` y `https://TU-APP.vercel.app/api/auth/callback/google` |
+
+   A diferencia de GitHub, un mismo cliente de Google admite varias URL, así que basta con uno.
+4. Copia el **ID de cliente** en `AUTH_GOOGLE_ID` y el **Secreto del cliente** en `AUTH_GOOGLE_SECRET` (en `.env.local` y en Vercel).
+5. Ejecuta `npx prisma db push` una vez: crea la tabla `cuentas_oauth`, donde se guardan los vínculos con Google y GitHub.
+
+Sin `AUTH_GOOGLE_ID`, el botón «Continuar con Google» no aparece. Si alguien ya tenía cuenta con ese correo, se vincula solo si Google lo verificó.
+
 ## 5. Vercel
 
 1. https://vercel.com → entra con GitHub → **Add New… → Project** → importa el repositorio.
@@ -91,6 +112,7 @@ Genera un **Client secret** en cada una. Local: `AUTH_GITHUB_ID` y `AUTH_GITHUB_
 | `DIRECT_URL` | URL de session pooler / directa |
 | `AUTH_SECRET` | resultado de `npx auth secret` |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | de la OAuth App **de producción** |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | del cliente OAuth de Google (opcional) |
 | `GEMINI_API_KEY` | tu clave |
 | `GEMINI_MODEL` | el modelo que te funcionó en local |
 | `GROQ_API_KEY` | tu clave de Groq (opcional, respaldo) |
@@ -101,13 +123,15 @@ Genera un **Client secret** en cada una. Local: `AUTH_GITHUB_ID` y `AUTH_GITHUB_
 4. Pulsa **Deploy**. Cuando termine tendrás la URL `https://TU-APP.vercel.app`.
 5. Crea la OAuth App de producción con esa URL (paso 4) y actualiza `AUTH_GITHUB_ID` y `AUTH_GITHUB_SECRET` en Vercel (Settings → Environment Variables), luego **Redeploy**.
 6. Región: en Settings → Functions elige una región cercana a tu base de datos para reducir latencia.
+7. `vercel.json` programa un **cron diario** a `/api/salud`, que hace una consulta mínima a la base de datos. Supabase pausa los proyectos gratuitos sin actividad; con esta consulta diaria el proyecto no se pausa. Puedes verlo en Settings → Cron Jobs.
 
 ### Verificación en producción
 
 - La landing y la demo cargan sin iniciar sesión.
 - Registro y login por correo funcionan.
 - Un análisis nuevo termina y aparece en el historial.
-- Login con GitHub funciona.
+- Login con GitHub y con Google funcionan.
+- `https://TU-APP.vercel.app/api/salud` responde `{"ok":true,"bd":"ok"}`.
 - El quiz se califica, la pregunta aparece en **Progreso** y el chat responde.
 - **Markdown** descarga un `.md`, **PDF** abre la vista para imprimir y **Compartir** crea un enlace que abre en una ventana privada sin iniciar sesión.
 
@@ -120,6 +144,9 @@ Genera un **Client secret** en cada una. Local: `AUTH_GITHUB_ID` y `AUTH_GITHUB_
 | Errores de *prepared statement* | Usa el session pooler (5432) también en `DATABASE_URL`. |
 | Login con GitHub: `redirect_uri_mismatch` | La callback de la OAuth App no coincide exactamente con la URL del sitio. |
 | `Configuration` / `MissingSecret` | Falta `AUTH_SECRET` en Vercel. |
+| `(ENOTFOUND) tenant/user postgres.… not found` en los logs, o «La base de datos no responde» en la app | Supabase **pausó** el proyecto por inactividad. En el dashboard de Supabase abre el proyecto y pulsa **Resume project**. El cron diario de `/api/salud` evita que vuelva a pasar. |
+| Login con Google: `redirect_uri_mismatch` | Falta `https://TU-APP.vercel.app/api/auth/callback/google` en las URI de redireccionamiento del cliente de Google. |
+| Login con Google: «acceso bloqueado» o «app no verificada» | La pantalla de consentimiento está en modo Prueba y tu correo no está en **Usuarios de prueba**, o falta **Publicar app**. |
 | El análisis dice «límite gratuito» | Se agotó la cuota por minuto o día de Gemini: espera, cambia `GEMINI_MODEL` o configura `GROQ_API_KEY` como respaldo. |
 | «Llegaste al límite de N análisis por día» | Es el límite propio de la app: sube `DAILY_ANALYSIS_LIMIT` o espera al día siguiente (zona `APP_TIMEZONE`). |
 | Error `column ... does not exist` | La BD es de una versión anterior: ejecuta `npx prisma db push`. |

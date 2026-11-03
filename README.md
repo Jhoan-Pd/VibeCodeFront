@@ -216,6 +216,7 @@ Si actualizas desde una versión anterior del proyecto, vuelve a ejecutar `npx p
 | `DIRECT_URL` | Sí (CLI) | URL directa o session pooler para `prisma db push`. |
 | `AUTH_SECRET` | Sí | Secreto de Auth.js: `npx auth secret` o `openssl rand -base64 32`. |
 | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | Para login con GitHub | Credenciales de la OAuth App. Sin ellas el botón de GitHub se oculta. |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Para login con Google | Cliente OAuth de Google Cloud («Aplicación web»). Sin ellas el botón de Google se oculta. |
 | `LLM_PROVIDER` | No | Proveedor principal: `gemini` (por defecto) o `groq`. |
 | `LLM_FALLBACK` | No | Respaldo. Por defecto el otro proveedor si tiene clave; `none` lo desactiva. |
 | `GEMINI_API_KEY` | Sí* | Clave de Google AI Studio. *Basta con una de las dos claves. |
@@ -249,7 +250,7 @@ Además, durante el desarrollo se probaron los flujos completos en el navegador 
 
 ## Guía de despliegue
 
-Ver [docs/GUIA-DESPLIEGUE.md](docs/GUIA-DESPLIEGUE.md): Supabase o Neon, Gemini, Groq, GitHub OAuth y Vercel paso a paso.
+Ver [docs/GUIA-DESPLIEGUE.md](docs/GUIA-DESPLIEGUE.md): Supabase o Neon, Gemini, Groq, GitHub y Google OAuth y Vercel paso a paso.
 
 ## Límites conocidos
 
