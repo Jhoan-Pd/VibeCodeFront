@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { jsonError, leerCuerpo } from "@/lib/api";
+import { errorInesperado, jsonError, leerCuerpo } from "@/lib/api";
 import { RegisterSchema } from "@/schemas/auth";
 import { EmailEnUsoError, registrarUsuario } from "@/services/usuarios";
 
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
   } catch (e) {
     if (e instanceof EmailEnUsoError) return jsonError("Ya existe una cuenta con ese correo", 409);
     console.error("[register]", e);
-    return jsonError("No se pudo crear la cuenta. Inténtalo de nuevo.", 500);
+    const respuesta = errorInesperado(e);
+    return respuesta.status === 503 ? respuesta : jsonError("No se pudo crear la cuenta. Inténtalo de nuevo.", 500);
   }
 }
