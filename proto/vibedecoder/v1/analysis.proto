@@ -1,0 +1,205 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+import "google/protobuf/timestamp.proto";
+import "vibedecoder/v1/common.proto";
+import "vibedecoder/v1/quiz.proto";
+
+// Creates, reads and maintains code analyses. Every RPC acts on the authenticated user's data;
+// an analysis owned by someone else is reported as NOT_FOUND (never PERMISSION_DENIED) so its
+// existence is not revealed.
+service AnalysisService {
+  // Runs every stage and streams progress events. A cache hit (same code and level) finishes
+  // immediately without calling the LLM or spending the daily quota.
+  rpc Analyze(AnalyzeRequest) returns (stream AnalyzeResponse);
+
+  rpc GetAnalysis(GetAnalysisRequest) returns (GetAnalysisResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  rpc ListAnalyses(ListAnalysesRequest) returns (ListAnalysesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  rpc DeleteAnalysis(DeleteAnalysisRequest) returns (DeleteAnalysisResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+
+  // Re-runs a single stage (or generates a new quiz). Counts as an AI query.
+  rpc RegenerateStage(RegenerateStageRequest) returns (RegenerateStageResponse);
+
+  // Replaces a stored diagram with a version fixed by the LLM after the browser's Mermaid parser
+  // rejected it. Counts as an AI query.
+  rpc RepairDiagram(RepairDiagramRequest) returns (RepairDiagramResponse);
+
+  rpc GetQuota(GetQuotaRequest) returns (GetQuotaResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message AnalyzeRequest {
+  string code = 1;
+  // A language id (javascript, python, ...) or "auto" to detect it on the server.
+  string language = 2;
+  Level level = 3;
+  optional string title = 4;
+  // Ignore the cache and call the LLM again (spends the daily quota).
+  bool force = 5;
+}
+
+// One progress event of the Analyze stream.
+message AnalyzeResponse {
+  oneof event {
+    AnalysisStarted started = 1;
+    StageUpdate stage = 2;
+    AnalysisFinished finished = 3;
+  }
+}
+
+message AnalysisStarted {
+  string analysis_id = 1;
+}
+
+enum StageStatus {
+  STAGE_STATUS_UNSPECIFIED = 0;
+  STAGE_STATUS_RUNNING = 1;
+  STAGE_STATUS_DONE = 2;
+  STAGE_STATUS_FAILED = 3;
+}
+
+message StageUpdate {
+  Stage stage = 1;
+  StageStatus status = 2;
+  // User-facing explanation when the stage failed.
+  optional string message = 3;
+}
+
+message AnalysisFinished {
+  string analysis_id = 1;
+  AnalysisStatus status = 2;
+  optional string message = 3;
+  bool from_cache = 4;
+}
+
+message Summary {
+  string purpose = 1;
+  repeated string inputs = 2;
+  repeated string outputs = 3;
+  repeated string dependencies = 4;
+}
+
+message ExplanationBlock {
+  LineRange range = 1;
+  string title = 2;
+  string explanation = 3;
+}
+
+message Diagram {
+  DiagramKind kind = 1;
+  string title = 2;
+  string mermaid = 3;
+}
+
+message Concept {
+  string name = 1;
+  string explanation = 2;
+  LineRange range = 3;
+}
+
+message Finding {
+  FindingKind kind = 1;
+  Severity severity = 2;
+  string title = 3;
+  string description = 4;
+  string suggestion = 5;
+  LineRange range = 6;
+}
+
+// Everything the viewer renders. Safe for the browser: the quiz never carries its answers.
+message AnalysisView {
+  string code = 1;
+  string language = 2;
+  Summary summary = 3;
+  repeated ExplanationBlock blocks = 4;
+  repeated Diagram diagrams = 5;
+  repeated Concept concepts = 6;
+  repeated Finding findings = 7;
+  Quiz quiz = 8;
+}
+
+message AnalysisDetail {
+  string id = 1;
+  string title = 2;
+  Level level = 3;
+  AnalysisStatus status = 4;
+  optional string error_message = 5;
+  google.protobuf.Timestamp created_at = 6;
+  // false until the audit stage has run (distinguishes "no findings" from "not audited yet").
+  bool audited = 7;
+  // Set when the analysis has a public read-only link.
+  optional string share_token = 8;
+  AnalysisView view = 9;
+}
+
+message GetAnalysisRequest {
+  string analysis_id = 1;
+}
+
+message GetAnalysisResponse {
+  AnalysisDetail analysis = 1;
+}
+
+message ListAnalysesRequest {
+  // Defaults to 50, at most 100.
+  int32 page_size = 1;
+}
+
+message AnalysisListItem {
+  string id = 1;
+  string title = 2;
+  string language = 3;
+  Level level = 4;
+  AnalysisStatus status = 5;
+  google.protobuf.Timestamp created_at = 6;
+  // First characters of the code, for the history cards.
+  string code_preview = 7;
+}
+
+message ListAnalysesResponse {
+  repeated AnalysisListItem analyses = 1;
+}
+
+message DeleteAnalysisRequest {
+  string analysis_id = 1;
+}
+
+message DeleteAnalysisResponse {}
+
+message RegenerateStageRequest {
+  string analysis_id = 1;
+  Stage stage = 2;
+}
+
+message RegenerateStageResponse {
+  Quota ai_queries = 1;
+}
+
+message RepairDiagramRequest {
+  string analysis_id = 1;
+  DiagramKind kind = 2;
+  // Error message reported by mermaid.parse() in the browser.
+  string parser_error = 3;
+}
+
+message RepairDiagramResponse {
+  Diagram diagram = 1;
+  Quota ai_queries = 2;
+}
+
+message GetQuotaRequest {}
+
+message GetQuotaResponse {
+  Quota analyses = 1;
+  Quota ai_queries = 2;
+}

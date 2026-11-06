@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+// Imports code from a public GitHub Gist. Only gist.github.com URLs are accepted (SSRF protection).
+service GistService {
+  rpc ImportGist(ImportGistRequest) returns (ImportGistResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message ImportGistRequest {
+  string url = 1;
+}
+
+message GistFile {
+  string name = 1;
+  string language = 2;
+  string content = 3;
+}
+
+message ImportGistResponse {
+  repeated GistFile files = 1;
+}

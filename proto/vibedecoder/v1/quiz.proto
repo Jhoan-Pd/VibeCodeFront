@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+import "google/protobuf/timestamp.proto";
+import "vibedecoder/v1/common.proto";
+
+// Grades quiz attempts on the server: the browser never sees the answers before submitting.
+service QuizService {
+  rpc SubmitAttempt(SubmitAttemptRequest) returns (SubmitAttemptResponse);
+}
+
+// A question as shown before answering (no correct answer, no explanation).
+message QuizQuestion {
+  string id = 1;
+  int32 order = 2;
+  QuestionKind kind = 3;
+  string prompt = 4;
+  // Choices for multiple-choice style questions, or the shuffled steps for ORDERING. Empty for TRUE_FALSE.
+  repeated string options = 5;
+  LineRange range = 6;
+  optional string concept = 7;
+}
+
+message QuizAttemptSummary {
+  string id = 1;
+  double score_percent = 2;
+  ComprehensionLevel comprehension = 3;
+  google.protobuf.Timestamp created_at = 4;
+}
+
+message Quiz {
+  string id = 1;
+  repeated QuizQuestion questions = 2;
+  // The current user's latest attempts, newest first.
+  repeated QuizAttemptSummary attempts = 3;
+}
+
+// An answer: the index of an option, a boolean (TRUE_FALSE) or the displayed positions in
+// execution order (ORDERING). An unset value means "not answered".
+message AnswerValue {
+  oneof value {
+    int32 option_index = 1;
+    bool boolean = 2;
+    Ordering ordering = 3;
+  }
+}
+
+message Ordering {
+  repeated int32 positions = 1;
+}
+
+message SubmittedAnswer {
+  string question_id = 1;
+  AnswerValue answer = 2;
+}
+
+message SubmitAttemptRequest {
+  string analysis_id = 1;
+  string quiz_id = 2;
+  repeated SubmittedAnswer answers = 3;
+}
+
+message QuestionResult {
+  string question_id = 1;
+  bool correct = 2;
+  AnswerValue user_answer = 3;
+  AnswerValue correct_answer = 4;
+  string explanation = 5;
+  LineRange range = 6;
+  optional string concept = 7;
+}
+
+message ReviewItem {
+  LineRange range = 1;
+  optional string concept = 2;
+}
+
+message QuizResult {
+  int32 correct_count = 1;
+  int32 total = 2;
+  // 0 to 100, rounded to one decimal.
+  double score_percent = 3;
+  ComprehensionLevel comprehension = 4;
+  repeated QuestionResult results = 5;
+  // Code to review (failed questions with a line range). Empty when the attempt passed.
+  repeated ReviewItem review = 6;
+}
+
+message SubmitAttemptResponse {
+  QuizResult result = 1;
+}

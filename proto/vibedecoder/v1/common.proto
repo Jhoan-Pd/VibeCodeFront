@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+// Shared enums and value types used by every VibeDecoder service.
+// Enum values are prefixed with the enum name (buf STANDARD lint) and 0 is always UNSPECIFIED.
+
+// How deep the explanations go. Chosen per analysis; the profile stores the default.
+enum Level {
+  LEVEL_UNSPECIFIED = 0;
+  LEVEL_BEGINNER = 1;
+  LEVEL_INTERMEDIATE = 2;
+  LEVEL_ADVANCED = 3;
+}
+
+enum AnalysisStatus {
+  ANALYSIS_STATUS_UNSPECIFIED = 0;
+  ANALYSIS_STATUS_PENDING = 1;
+  ANALYSIS_STATUS_PROCESSING = 2;
+  ANALYSIS_STATUS_COMPLETED = 3;
+  ANALYSIS_STATUS_FAILED = 4;
+}
+
+// Each stage is generated independently (and in parallel) and can be regenerated on its own.
+enum Stage {
+  STAGE_UNSPECIFIED = 0;
+  STAGE_SUMMARY = 1;
+  STAGE_LINES = 2;
+  STAGE_DIAGRAM = 3;
+  STAGE_GLOSSARY = 4;
+  STAGE_AUDIT = 5;
+  STAGE_QUIZ = 6;
+}
+
+enum DiagramKind {
+  DIAGRAM_KIND_UNSPECIFIED = 0;
+  DIAGRAM_KIND_FLOW = 1;
+  DIAGRAM_KIND_CLASS = 2;
+  DIAGRAM_KIND_SEQUENCE = 3;
+}
+
+enum FindingKind {
+  FINDING_KIND_UNSPECIFIED = 0;
+  FINDING_KIND_SECURITY = 1;
+  FINDING_KIND_BAD_PRACTICE = 2;
+  FINDING_KIND_DEAD_CODE = 3;
+  FINDING_KIND_ERROR_HANDLING = 4;
+  // APIs or parameters that probably do not exist (a typical AI mistake).
+  FINDING_KIND_HALLUCINATION = 5;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_LOW = 1;
+  SEVERITY_MEDIUM = 2;
+  SEVERITY_HIGH = 3;
+  SEVERITY_CRITICAL = 4;
+}
+
+enum QuestionKind {
+  QUESTION_KIND_UNSPECIFIED = 0;
+  QUESTION_KIND_MULTIPLE_CHOICE = 1;
+  QUESTION_KIND_WHAT_PRINTS = 2;
+  QUESTION_KIND_TRUE_FALSE = 3;
+  QUESTION_KIND_WHAT_IF = 4;
+  QUESTION_KIND_ORDERING = 5;
+}
+
+enum ComprehensionLevel {
+  COMPREHENSION_LEVEL_UNSPECIFIED = 0;
+  COMPREHENSION_LEVEL_EXCELLENT = 1;
+  COMPREHENSION_LEVEL_GOOD = 2;
+  COMPREHENSION_LEVEL_PARTIAL = 3;
+  COMPREHENSION_LEVEL_INSUFFICIENT = 4;
+}
+
+// Inclusive, 1-based range of source lines. Absent (unset message) means "the whole file / no range".
+message LineRange {
+  int32 start = 1;
+  int32 end = 2;
+}
+
+// Daily allowance of one resource for the current user.
+message Quota {
+  int32 used = 1;
+  int32 limit = 2;
+  int32 remaining = 3;
+}

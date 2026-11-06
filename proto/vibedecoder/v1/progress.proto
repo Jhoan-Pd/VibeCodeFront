@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+import "google/protobuf/timestamp.proto";
+import "vibedecoder/v1/common.proto";
+
+// Learning dashboard computed from the user's quiz answers.
+service ProgressService {
+  rpc GetProgress(GetProgressRequest) returns (GetProgressResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+enum MasteryStatus {
+  MASTERY_STATUS_UNSPECIFIED = 0;
+  MASTERY_STATUS_MASTERED = 1;
+  MASTERY_STATUS_IN_PROGRESS = 2;
+  MASTERY_STATUS_NEEDS_REVIEW = 3;
+}
+
+message ReviewTarget {
+  string analysis_id = 1;
+  // Title of that analysis, for the link text.
+  string analysis_title = 2;
+  LineRange range = 3;
+}
+
+message ConceptProgress {
+  string name = 1;
+  // Recency-weighted share of correct answers, 0 to 100.
+  double mastery_percent = 2;
+  int32 correct_count = 3;
+  int32 total = 4;
+  MasteryStatus status = 5;
+  // Only one answer so far: not enough evidence yet.
+  bool few_answers = 6;
+  // Where to review: the last failed question (or the last answered one).
+  ReviewTarget review = 7;
+}
+
+message LanguageCount {
+  string language = 1;
+  int32 count = 2;
+}
+
+message ScorePoint {
+  google.protobuf.Timestamp attempted_at = 1;
+  double score_percent = 2;
+  string analysis_id = 3;
+  string analysis_title = 4;
+}
+
+message ProgressTotals {
+  int32 analyses = 1;
+  int32 completed_analyses = 2;
+  int32 attempts = 3;
+  int32 quizzes_answered = 4;
+  int32 chat_questions = 5;
+}
+
+message GetProgressRequest {}
+
+message GetProgressResponse {
+  ProgressTotals totals = 1;
+  // Average of the best attempt of each quiz. Unset when there are no attempts.
+  optional double average_score = 2;
+  // Recent half minus older half, in percentage points. Unset with fewer than 4 attempts.
+  optional double trend = 3;
+  // Consecutive days (ending today or yesterday) with any activity.
+  int32 streak_days = 4;
+  repeated ConceptProgress concepts = 5;
+  repeated LanguageCount languages = 6;
+  // Most recent attempts in chronological order.
+  repeated ScorePoint score_history = 7;
+}

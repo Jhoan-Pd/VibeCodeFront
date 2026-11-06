@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+import "vibedecoder/v1/analysis.proto";
+
+// Public read-only links. The token is 192 random bits and never derives from the analysis id.
+service ShareService {
+  // Returns the existing token when the analysis is already shared, so links already sent keep working.
+  rpc EnableShareLink(EnableShareLinkRequest) returns (EnableShareLinkResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+
+  // Revokes the link forever: the old URL stops working.
+  rpc DisableShareLink(DisableShareLinkRequest) returns (DisableShareLinkResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+
+  // Public (no authentication). Never includes the quiz, the chat or the author.
+  // Side-effect free, so clients may call it with HTTP GET and caches may store it briefly.
+  rpc GetSharedAnalysis(GetSharedAnalysisRequest) returns (GetSharedAnalysisResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+message EnableShareLinkRequest {
+  string analysis_id = 1;
+}
+
+message EnableShareLinkResponse {
+  string token = 1;
+}
+
+message DisableShareLinkRequest {
+  string analysis_id = 1;
+}
+
+message DisableShareLinkResponse {}
+
+message GetSharedAnalysisRequest {
+  string token = 1;
+}
+
+message GetSharedAnalysisResponse {
+  AnalysisDetail analysis = 1;
+}

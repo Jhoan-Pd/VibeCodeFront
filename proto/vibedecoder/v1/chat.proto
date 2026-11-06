@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+import "google/protobuf/timestamp.proto";
+import "vibedecoder/v1/common.proto";
+
+// Follow-up questions about an analysis, optionally scoped to selected lines.
+service ChatService {
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Asks the LLM and stores the question and the answer together. Counts as an AI query.
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+
+  rpc ClearConversation(ClearConversationRequest) returns (ClearConversationResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+}
+
+enum ChatRole {
+  CHAT_ROLE_UNSPECIFIED = 0;
+  CHAT_ROLE_USER = 1;
+  CHAT_ROLE_ASSISTANT = 2;
+}
+
+message ChatMessage {
+  string id = 1;
+  ChatRole role = 2;
+  string content = 3;
+  LineRange range = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListMessagesRequest {
+  string analysis_id = 1;
+}
+
+message ListMessagesResponse {
+  repeated ChatMessage messages = 1;
+}
+
+message SendMessageRequest {
+  string analysis_id = 1;
+  string message = 2;
+  LineRange range = 3;
+}
+
+message SendMessageResponse {
+  // The stored question followed by the assistant's answer.
+  repeated ChatMessage messages = 1;
+  Quota ai_queries = 2;
+}
+
+message ClearConversationRequest {
+  string analysis_id = 1;
+}
+
+message ClearConversationResponse {}

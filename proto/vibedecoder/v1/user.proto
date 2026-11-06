@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package vibedecoder.v1;
+
+import "google/protobuf/timestamp.proto";
+import "vibedecoder/v1/common.proto";
+
+// Accounts and profiles. Register is public; VerifyCredentials and LinkOAuthAccount can only be
+// called by the frontend server (service token), never from a browser.
+service UserService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  rpc VerifyCredentials(VerifyCredentialsRequest) returns (VerifyCredentialsResponse);
+
+  // Finds or creates the user behind a Google/GitHub sign-in. Links to an existing account with the
+  // same email only when the provider verified that email.
+  rpc LinkOAuthAccount(LinkOAuthAccountRequest) returns (LinkOAuthAccountResponse);
+
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  rpc UpdateProfile(UpdateProfileRequest) returns (UpdateProfileResponse) {
+    option idempotency_level = IDEMPOTENT;
+  }
+}
+
+enum IdentityProvider {
+  IDENTITY_PROVIDER_UNSPECIFIED = 0;
+  IDENTITY_PROVIDER_GOOGLE = 1;
+  IDENTITY_PROVIDER_GITHUB = 2;
+}
+
+message User {
+  string id = 1;
+  optional string name = 2;
+  string email = 3;
+  optional string image_url = 4;
+  Level level = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message RegisterRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message RegisterResponse {
+  string user_id = 1;
+}
+
+message VerifyCredentialsRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message VerifyCredentialsResponse {
+  // Unset when the email or the password is wrong (the response never says which).
+  User user = 1;
+}
+
+message LinkOAuthAccountRequest {
+  IdentityProvider provider = 1;
+  // Stable id of the user at the provider.
+  string external_id = 2;
+  string email = 3;
+  bool email_verified = 4;
+  optional string name = 5;
+  optional string image_url = 6;
+}
+
+message LinkOAuthAccountResponse {
+  string user_id = 1;
+}
+
+message GetProfileRequest {}
+
+message GetProfileResponse {
+  User user = 1;
+}
+
+message UpdateProfileRequest {
+  Level level = 1;
+  optional string name = 2;
+}
+
+message UpdateProfileResponse {
+  User user = 1;
+}
