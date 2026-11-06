@@ -1,82 +1,217 @@
-import { TIPOS_MERMAID, type TipoMermaid } from "@/lib/mermaid";
-import type { Bloque, Resumen, SEVERIDADES, TIPOS_HALLAZGO } from "./analysis";
-import type { PreguntaPublica } from "./quiz";
-
 /**
- * Tipos de los datos que el visor recibe (seguros para el cliente: no incluyen respuestas del quiz).
- * Los usan la página del análisis, la demo de la landing, el enlace público y la vista para imprimir.
+ * View models of the frontend. Components only know these plain types (string unions, ISO dates,
+ * null for "absent"); the protobuf messages of the API are converted at the edge by lib/rpc/mappers.ts.
+ * Every type is serializable, so Server Components can pass them to Client Components as props.
  */
 
-export type TipoHallazgo = (typeof TIPOS_HALLAZGO)[number];
-export type Severidad = (typeof SEVERIDADES)[number];
+export const LEVELS = ["BEGINNER", "INTERMEDIATE", "ADVANCED"] as const;
+export type Level = (typeof LEVELS)[number];
 
-export interface DiagramaVista {
-  tipo: TipoMermaid;
-  titulo: string;
+export const ANALYSIS_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] as const;
+export type AnalysisStatus = (typeof ANALYSIS_STATUSES)[number];
+
+/** Analysis stages, in display order. */
+export const STAGES = ["summary", "lines", "diagram", "glossary", "audit", "quiz"] as const;
+export type Stage = (typeof STAGES)[number];
+
+/** Diagram kinds, in tab order. */
+export const DIAGRAM_KINDS = ["FLOW", "CLASS", "SEQUENCE"] as const;
+export type DiagramKind = (typeof DIAGRAM_KINDS)[number];
+
+export const FINDING_KINDS = ["SECURITY", "BAD_PRACTICE", "DEAD_CODE", "ERROR_HANDLING", "HALLUCINATION"] as const;
+export type FindingKind = (typeof FINDING_KINDS)[number];
+
+export const SEVERITIES = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
+export type Severity = (typeof SEVERITIES)[number];
+
+export const QUESTION_KINDS = ["MULTIPLE_CHOICE", "WHAT_PRINTS", "TRUE_FALSE", "WHAT_IF", "ORDERING"] as const;
+export type QuestionKind = (typeof QUESTION_KINDS)[number];
+
+export const COMPREHENSION_LEVELS = ["EXCELLENT", "GOOD", "PARTIAL", "INSUFFICIENT"] as const;
+export type ComprehensionLevel = (typeof COMPREHENSION_LEVELS)[number];
+
+/** Pass mark of the quiz: below it the result recommends reviewing the code. */
+export const PASS_MARK = 70;
+
+export interface LineRange {
+  start: number;
+  end: number;
+}
+
+export interface Summary {
+  purpose: string;
+  inputs: string[];
+  outputs: string[];
+  dependencies: string[];
+}
+
+export interface Block {
+  lineStart: number;
+  lineEnd: number;
+  title: string;
+  explanation: string;
+}
+
+export interface DiagramView {
+  kind: DiagramKind;
+  title: string;
   mermaid: string;
 }
 
-export interface ConceptoVista {
-  nombre: string;
-  explicacion: string;
-  lineaInicio: number | null;
-  lineaFin: number | null;
+export interface ConceptView {
+  name: string;
+  explanation: string;
+  lineStart: number | null;
+  lineEnd: number | null;
 }
 
-export interface HallazgoVista {
-  tipo: TipoHallazgo;
-  severidad: Severidad;
-  titulo: string;
-  descripcion: string;
-  sugerencia: string;
-  lineaInicio: number | null;
-  lineaFin: number | null;
+export interface FindingView {
+  kind: FindingKind;
+  severity: Severity;
+  title: string;
+  description: string;
+  suggestion: string;
+  lineStart: number | null;
+  lineEnd: number | null;
 }
 
-export interface IntentoVista {
+/** An answer: option index, boolean (TRUE_FALSE) or displayed positions in execution order (ORDERING). */
+export type AnswerValue = number | boolean | number[];
+
+/** A question as shown before answering: never the correct answer nor the explanation. */
+export interface PublicQuestion {
   id: string;
-  porcentaje: number;
-  nivelComprension: string;
-  creadoEn: Date | string;
+  position: number;
+  kind: QuestionKind;
+  prompt: string;
+  options: string[] | null;
+  lineStart: number | null;
+  lineEnd: number | null;
+  concept: string | null;
 }
 
-export interface QuizVista {
+export interface AttemptView {
   id: string;
-  preguntas: PreguntaPublica[];
-  intentos: IntentoVista[];
+  scorePercent: number;
+  comprehension: ComprehensionLevel;
+  createdAt: string;
 }
 
-export interface AnalisisVista {
-  codigo: string;
-  lenguaje: string;
-  resumen: Resumen | null;
-  bloques: Bloque[];
-  diagramas: DiagramaVista[];
-  conceptos: ConceptoVista[];
-  hallazgos: HallazgoVista[];
-  quiz: QuizVista | null;
+export interface QuizView {
+  id: string;
+  questions: PublicQuestion[];
+  attempts: AttemptView[];
 }
 
-/** Orden de las pestañas de diagramas: el de TIPOS_MERMAID. */
-export const ORDEN_DIAGRAMAS: readonly TipoMermaid[] = TIPOS_MERMAID;
+/** Everything the viewer renders. Used by the analysis page, the landing demo, public links and the print view. */
+export interface AnalysisView {
+  code: string;
+  language: string;
+  summary: Summary | null;
+  blocks: Block[];
+  diagrams: DiagramView[];
+  concepts: ConceptView[];
+  findings: FindingView[];
+  quiz: QuizView | null;
+}
 
-export const DIAGRAMA_INFO: Record<TipoMermaid, string> = {
-  FLUJO: "Flujo",
-  CLASES: "Clases",
-  SECUENCIA: "Secuencia",
-};
+export interface AnalysisDetail {
+  id: string;
+  title: string;
+  level: Level;
+  status: AnalysisStatus;
+  errorMessage: string | null;
+  createdAt: string;
+  /** false until the audit ran (distinguishes "no findings" from "not audited yet"). */
+  audited: boolean;
+  shareToken: string | null;
+  view: AnalysisView;
+}
 
-export const HALLAZGO_INFO: Record<TipoHallazgo, string> = {
-  SEGURIDAD: "Seguridad",
-  MALA_PRACTICA: "Mala práctica",
-  CODIGO_MUERTO: "Código muerto",
-  MANEJO_ERRORES: "Manejo de errores",
-  ALUCINACION: "Posible alucinación de la IA",
-};
+export interface AnalysisListItem {
+  id: string;
+  title: string;
+  language: string;
+  level: Level;
+  status: AnalysisStatus;
+  createdAt: string;
+  codePreview: string;
+}
 
-export const SEVERIDAD_INFO: Record<Severidad, { label: string; variant: "destructive" | "warning" | "secondary" | "outline" }> = {
-  CRITICA: { label: "Crítica", variant: "destructive" },
-  ALTA: { label: "Alta", variant: "destructive" },
-  MEDIA: { label: "Media", variant: "warning" },
-  BAJA: { label: "Baja", variant: "secondary" },
-};
+export interface QuestionResult {
+  questionId: string;
+  correct: boolean;
+  userAnswer: AnswerValue | null;
+  correctAnswer: AnswerValue | null;
+  explanation: string;
+  lineStart: number | null;
+  lineEnd: number | null;
+  concept: string | null;
+}
+
+export interface ReviewItem {
+  lineStart: number;
+  lineEnd: number;
+  concept: string | null;
+}
+
+export interface QuizResult {
+  correctCount: number;
+  total: number;
+  /** 0 to 100, one decimal. */
+  scorePercent: number;
+  comprehension: ComprehensionLevel;
+  results: QuestionResult[];
+  review: ReviewItem[];
+}
+
+export interface ChatMessageView {
+  id: string;
+  role: "USER" | "ASSISTANT";
+  content: string;
+  lineStart: number | null;
+  lineEnd: number | null;
+  createdAt: string;
+}
+
+export interface QuotaView {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+export type MasteryStatus = "mastered" | "in_progress" | "needs_review";
+
+export interface ConceptProgressView {
+  name: string;
+  masteryPercent: number;
+  correctCount: number;
+  total: number;
+  status: MasteryStatus;
+  fewAnswers: boolean;
+  review: { analysisId: string; analysisTitle: string; lineStart: number | null; lineEnd: number | null } | null;
+}
+
+export interface ProgressView {
+  totals: { analyses: number; completedAnalyses: number; attempts: number; quizzesAnswered: number; chatQuestions: number };
+  averageScore: number | null;
+  trend: number | null;
+  streakDays: number;
+  concepts: ConceptProgressView[];
+  languages: { language: string; count: number }[];
+  scoreHistory: { attemptedAt: string; scorePercent: number; analysisId: string; analysisTitle: string }[];
+}
+
+export interface UserProfile {
+  id: string;
+  name: string | null;
+  email: string;
+  imageUrl: string | null;
+  level: Level;
+}
+
+export interface GistFileView {
+  name: string;
+  language: string;
+  content: string;
+}
