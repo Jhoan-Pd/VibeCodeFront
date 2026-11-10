@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   darkMode: ["class"],
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
+  content: ["./src/**/*.{ts,tsx}"],
   theme: {
     container: { center: true, padding: "1rem", screens: { "2xl": "1400px" } },
     extend: {
@@ -36,9 +36,9 @@ const config: Config = {
       },
       transitionTimingFunction: { "out-expo": "var(--ease-out-expo)", "out-soft": "var(--ease-out-soft)" },
       fontFamily: {
-        // Fuentes autoalojadas con @fontsource (sin CDN). Si no cargan, se usa la pila del sistema.
+        // Self-hosted with @fontsource (no CDN). If they fail to load, the system stack is used.
         sans: ["Inter Variable", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"],
-        // Entre comillas: un nombre con un número ("4") sin comillas invalida toda la declaración CSS.
+        // Quoted: an unquoted name with a number ("4") invalidates the whole CSS declaration.
         display: ['"Source Serif 4 Variable"', "Georgia", "Cambria", '"Times New Roman"', "serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono", "monospace"],
       },
