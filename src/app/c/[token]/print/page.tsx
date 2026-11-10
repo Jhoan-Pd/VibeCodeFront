@@ -1,26 +1,31 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { BarraImpresion } from "@/components/impresion/barra-impresion";
-import { VistaImpresion } from "@/components/impresion/vista-impresion";
-import { esTokenValido } from "@/lib/compartir";
-import { cargarAnalisis } from "@/services/vista.service";
+import { PrintToolbar } from "@/components/print/print-toolbar";
+import { PrintView } from "@/components/print/print-view";
+import { messages } from "@/i18n";
+import { getSharedAnalysis } from "@/lib/rpc/queries";
+import { isValidShareToken } from "@/lib/share";
 
-export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Imprimir análisis compartido", robots: { index: false, follow: false } };
+/** Same ISR policy as the public page it prints. */
+export const revalidate = 60;
+export const dynamicParams = true;
+export function generateStaticParams(): { token: string }[] {
+  return [];
+}
 
-export default async function ImprimirCompartidoPage({ params }: { params: Promise<{ token: string }> }) {
+export const metadata: Metadata = { title: messages.print.sharedMetaTitle, robots: { index: false, follow: false } };
+
+export default async function PrintSharedPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  if (!esTokenValido(token)) notFound();
-
-  // Igual que la vista pública: sin quiz (el enlace es de solo lectura).
-  const cargado = await cargarAnalisis({ tokenPublico: token }, { usuarioQuiz: null, incluirQuiz: false });
-  if (!cargado) notFound();
-  const { analisis, vista } = cargado;
+  if (!isValidShareToken(token)) notFound();
+  // Like the public page: no quiz (the link is read-only).
+  const analysis = await getSharedAnalysis(token);
+  if (!analysis) notFound();
 
   return (
     <div className="container space-y-6 py-8 print:max-w-none print:p-0">
-      <BarraImpresion volverA={`/c/${token}`} />
-      <VistaImpresion datos={vista} titulo={analisis.titulo} nivel={analisis.nivel} creadoEn={analisis.creadoEn} />
+      <PrintToolbar backTo={`/c/${token}`} />
+      <PrintView view={analysis.view} title={analysis.title} level={analysis.level} createdAt={analysis.createdAt} />
     </div>
   );
 }

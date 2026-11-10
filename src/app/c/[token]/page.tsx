@@ -6,56 +6,66 @@ import { AnalysisViewer } from "@/components/analysis-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/misc";
-import { esTokenValido } from "@/lib/compartir";
+import { messages } from "@/i18n";
 import { languageLabel } from "@/lib/language";
-import { formatearFecha } from "@/lib/utils";
-import { NIVEL_INFO } from "@/schemas/common";
-import { cargarAnalisis } from "@/services/vista.service";
+import { getSharedAnalysis } from "@/lib/rpc/queries";
+import { isValidShareToken } from "@/lib/share";
+import { formatDateTime } from "@/lib/utils";
 
-export const dynamic = "force-dynamic";
-
-// Los enlaces compartidos no deben aparecer en buscadores.
-export const metadata: Metadata = { title: "Análisis compartido", robots: { index: false, follow: false } };
+const t = messages.shared;
 
 /**
- * Vista pública de solo lectura. Solo se accede con el token (no con el id), no muestra datos del
- * autor, ni el chat, ni el quiz (que revelaría sus intentos), y no permite llamar al LLM.
+ * Public read-only link: ISR. No page is built ahead of time (generateStaticParams returns nothing);
+ * the first visit renders it on the server and it is then served from cache and regenerated in the
+ * background at most every 60 seconds. A revoked link disappears after that window. The backend call is
+ * an HTTP GET with public cache headers (GetSharedAnalysis is NO_SIDE_EFFECTS in the contract).
  */
-export default async function AnalisisCompartidoPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  if (!esTokenValido(token)) notFound();
+// A literal (Next reads it statically); keep it equal to SHARED_REVALIDATE_SECONDS in lib/rpc/queries.ts.
+export const revalidate = 60;
+export const dynamicParams = true;
+export function generateStaticParams(): { token: string }[] {
+  return [];
+}
 
-  const cargado = await cargarAnalisis({ tokenPublico: token }, { usuarioQuiz: null, incluirQuiz: false });
-  if (!cargado) notFound();
-  const { analisis, vista } = cargado;
+// Shared links must not show up in search engines.
+export const metadata: Metadata = { title: t.metaTitle, robots: { index: false, follow: false } };
+
+export default async function SharedAnalysisPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  if (!isValidShareToken(token)) notFound();
+  const analysis = await getSharedAnalysis(token);
+  if (!analysis) notFound();
 
   return (
     <div className="container space-y-6 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
-          <h1 className="break-words vd-title text-3xl sm:text-4xl">{analisis.titulo}</h1>
+          <h1 className="vd-title break-words text-3xl sm:text-4xl">{analysis.title}</h1>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="secondary">
-              <Eye className="size-3" /> Solo lectura
+              <Eye className="size-3" /> {t.readOnly}
             </Badge>
-            <Badge variant="outline">{languageLabel(analisis.lenguaje)}</Badge>
-            <Badge variant="outline">Nivel {NIVEL_INFO[analisis.nivel].label.toLowerCase()}</Badge>
-            <span>{formatearFecha(analisis.creadoEn)}</span>
+            <Badge variant="outline">{languageLabel(analysis.view.language)}</Badge>
+            <Badge variant="outline">{messages.analysis.level(messages.labels.level[analysis.level].label)}</Badge>
+            <span>{formatDateTime(analysis.createdAt)}</span>
           </div>
         </div>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/c/${token}/imprimir`}>
-            <Printer /> Imprimir o PDF
+          <Link href={`/c/${token}/print`}>
+            <Printer /> {t.print}
           </Link>
         </Button>
       </div>
 
-      <Alert variant="info" title="Te compartieron este análisis">
-        Lo generó VibeDecoder a partir de código escrito con IA. <Link href="/register" className="font-medium underline">Crea una cuenta gratis</Link> para
-        analizar tu propio código, responder quizzes y preguntarle a la IA sobre cada línea.
+      <Alert variant="info" title={t.noticeTitle}>
+        {t.noticeBefore}
+        <Link href="/register" className="font-medium underline">
+          {t.noticeLink}
+        </Link>
+        {t.noticeAfter}
       </Alert>
 
-      <AnalysisViewer datos={vista} soloLectura />
+      <AnalysisViewer view={analysis.view} audited={analysis.audited} readOnly />
     </div>
   );
 }
