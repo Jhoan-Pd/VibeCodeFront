@@ -4,31 +4,26 @@ import { authConfig } from "./auth.config";
 
 const { auth } = NextAuth(authConfig);
 
-const PAGINAS_PROTEGIDAS = ["/dashboard", "/progreso", "/analyze", "/analysis", "/perfil"];
-const API_PROTEGIDAS = ["/api/analyze", "/api/analysis", "/api/gist", "/api/perfil"];
-const PAGINAS_SOLO_INVITADOS = ["/login", "/register"];
+const PROTECTED_PAGES = ["/dashboard", "/progress", "/analyze", "/analysis", "/profile"];
+const GUEST_ONLY_PAGES = ["/login", "/register"];
 
-const coincide = (ruta: string, prefijos: string[]) => prefijos.some((p) => ruta === p || ruta.startsWith(`${p}/`));
+const matches = (path: string, prefixes: string[]) => prefixes.some((p) => path === p || path.startsWith(`${p}/`));
 
 /**
- * Protege rutas ANTES de renderizar. Es la primera barrera; además cada API route y cada página
- * del servidor vuelven a comprobar la sesión con auth() (defensa en profundidad).
+ * Guards pages BEFORE rendering. It is the first barrier only: server pages ask the backend with the
+ * user's token, and the backend checks it again on every RPC (defence in depth).
  */
 export default auth((req) => {
   const { pathname, search } = req.nextUrl;
-  const autenticado = !!req.auth;
+  const signedIn = !!req.auth;
 
-  if (!autenticado && coincide(pathname, API_PROTEGIDAS)) {
-    return NextResponse.json({ error: "No autorizado. Inicia sesión." }, { status: 401 });
-  }
-
-  if (!autenticado && coincide(pathname, PAGINAS_PROTEGIDAS)) {
+  if (!signedIn && matches(pathname, PROTECTED_PAGES)) {
     const url = new URL("/login", req.nextUrl.origin);
     url.searchParams.set("callbackUrl", pathname + search);
     return NextResponse.redirect(url);
   }
 
-  if (autenticado && coincide(pathname, PAGINAS_SOLO_INVITADOS)) {
+  if (signedIn && matches(pathname, GUEST_ONLY_PAGES)) {
     return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
   }
 
@@ -36,5 +31,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/progreso/:path*", "/analyze/:path*", "/analysis/:path*", "/perfil/:path*", "/login", "/register", "/api/analyze/:path*", "/api/analysis/:path*", "/api/gist/:path*", "/api/perfil/:path*"],
+  matcher: ["/dashboard/:path*", "/progress/:path*", "/analyze/:path*", "/analysis/:path*", "/profile/:path*", "/login", "/register"],
 };

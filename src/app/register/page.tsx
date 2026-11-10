@@ -1,20 +1,23 @@
 import type { Metadata } from "next";
 import { RegisterForm } from "@/components/auth-forms";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { proveedoresHabilitados } from "@/lib/oauth";
+import { messages } from "@/i18n";
+import { enabledProviders } from "@/lib/oauth";
 
-export const metadata: Metadata = { title: "Crear cuenta" };
+const t = messages.auth.register;
+
+export const metadata: Metadata = { title: t.metaTitle };
 
 export default function RegisterPage() {
   return (
     <div className="container flex min-h-[70vh] items-center justify-center py-12">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Crea tu cuenta</CardTitle>
-          <CardDescription>Gratis. Guarda tus análisis y sigue tu progreso.</CardDescription>
+          <CardTitle className="text-xl">{t.title}</CardTitle>
+          <CardDescription>{t.description}</CardDescription>
         </CardHeader>
         <CardContent>
-          <RegisterForm proveedores={proveedoresHabilitados(process.env)} />
+          <RegisterForm providers={enabledProviders(process.env)} />
         </CardContent>
       </Card>
     </div>

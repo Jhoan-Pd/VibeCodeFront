@@ -2,34 +2,34 @@ import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth-forms";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/misc";
-import { mensajeErrorAuth } from "@/lib/errores-auth";
-import { proveedoresHabilitados } from "@/lib/oauth";
-import { rutaInternaSegura } from "@/lib/redirect";
+import { messages } from "@/i18n";
+import { authErrorMessage } from "@/lib/auth-errors";
+import { enabledProviders } from "@/lib/oauth";
+import { safeInternalPath } from "@/lib/safe-redirect";
 
-export const metadata: Metadata = { title: "Entrar" };
+const t = messages.auth.login;
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ callbackUrl?: string; error?: string; creada?: string }>;
-}) {
-  const { callbackUrl, error, creada } = await searchParams;
-  const mensajeError = mensajeErrorAuth(error);
+export const metadata: Metadata = { title: t.metaTitle };
+
+/** Dynamic (SSR): it reads the query string and the providers enabled by the server's environment. */
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ callbackUrl?: string; error?: string; created?: string }> }) {
+  const { callbackUrl, error, created } = await searchParams;
+  const errorMessage = authErrorMessage(error);
   return (
     <div className="container flex min-h-[70vh] items-center justify-center py-12">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">Bienvenido de vuelta</CardTitle>
-          <CardDescription>Entra para ver tu historial y analizar código nuevo.</CardDescription>
+          <CardTitle className="text-xl">{t.title}</CardTitle>
+          <CardDescription>{t.description}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {creada === "1" && !mensajeError && (
-            <Alert variant="success" title="Tu cuenta se creó">
-              Entra con tu correo y tu contraseña.
+          {created === "1" && !errorMessage && (
+            <Alert variant="success" title={t.accountCreatedTitle}>
+              {t.accountCreatedBody}
             </Alert>
           )}
-          {mensajeError && <Alert variant="error">{mensajeError}</Alert>}
-          <LoginForm callbackUrl={rutaInternaSegura(callbackUrl)} proveedores={proveedoresHabilitados(process.env)} />
+          {errorMessage && <Alert variant="error">{errorMessage}</Alert>}
+          <LoginForm callbackUrl={safeInternalPath(callbackUrl)} providers={enabledProviders(process.env)} />
         </CardContent>
       </Card>
     </div>

@@ -1,29 +1,28 @@
-import { MENSAJE_BD_NO_DISPONIBLE } from "./errores-bd";
+import { messages } from "@/i18n";
+
+/** Error codes the app itself sends to /login?error=… from the Auth.js signIn callback. */
+export const AUTH_ERROR = { emailNotVerified: "EmailNotVerified", backendUnavailable: "BackendUnavailable" } as const;
 
 /**
- * Mensajes para los errores que Auth.js envía a /login?error=… (pages.error = "/login").
- * Así la persona nunca ve la página genérica «Server error» de Auth.js.
+ * Message for an Auth.js error code (pages.error = "/login"), so the person never sees Auth.js's
+ * generic "Server error" page. Null when there is no error.
  */
-export function mensajeErrorAuth(codigo: string | undefined): string | null {
-  if (!codigo) return null;
-  switch (codigo) {
+export function authErrorMessage(code: string | undefined): string | null {
+  if (!code) return null;
+  const t = messages.auth.authJsError;
+  switch (code) {
     case "Configuration":
-      return "No pudimos iniciar sesión por un problema de configuración del servidor. Si administras la app, revisa que AUTH_SECRET y DATABASE_URL estén definidas en Vercel (Settings → Environment Variables) y vuelve a desplegar.";
     case "CredentialsSignin":
-      return "Correo o contraseña incorrectos.";
     case "AccessDenied":
-      return "No tienes permiso para entrar con esa cuenta.";
-    case "CorreoNoVerificado":
-      return "Ya hay una cuenta con ese correo y el proveedor no lo tiene verificado, así que no podemos unirlas. Entra con tu correo y contraseña, o verifica el correo en tu cuenta de Google o GitHub.";
-    case "BaseNoDisponible":
-      return MENSAJE_BD_NO_DISPONIBLE;
+    case "Verification":
+    case AUTH_ERROR.emailNotVerified:
+    case AUTH_ERROR.backendUnavailable:
+      return t[code];
     case "OAuthAccountNotLinked":
     case "OAuthCallbackError":
     case "OAuthSignin":
-      return "No se pudo entrar con Google o GitHub. Inténtalo de nuevo o entra con tu correo.";
-    case "Verification":
-      return "El enlace de acceso venció o ya se usó.";
+      return t.OAuthFailed;
     default:
-      return "No se pudo iniciar sesión. Inténtalo de nuevo.";
+      return t.default;
   }
 }
