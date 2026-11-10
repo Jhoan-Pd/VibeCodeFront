@@ -1,126 +1,120 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { auth } from "@/auth";
-import { AccionesAnalisis } from "@/components/acciones-analisis";
+import { AnalysisActions } from "@/components/analysis-actions";
 import { AnalysisViewer } from "@/components/analysis-viewer";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { DeleteAnalysisButton } from "@/components/delete-analysis-button";
-import { RegenerarEtapa } from "@/components/regenerar-etapa";
+import { RegenerateStageButton } from "@/components/regenerate-stage-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/misc";
+import { messages } from "@/i18n";
 import { languageLabel } from "@/lib/language";
-import { rangoDesdeParametro } from "@/lib/rango";
-import { formatearFecha } from "@/lib/utils";
-import type { Etapa } from "@/schemas/analysis";
-import { NIVEL_INFO } from "@/schemas/common";
-import { listarMensajes } from "@/services/chat.service";
-import { cargarAnalisis } from "@/services/vista.service";
+import { getAnalysis, listChatMessages } from "@/lib/rpc/queries";
+import { formatDateTime } from "@/lib/utils";
+import { countLines, spanFromParam } from "@/lib/viewer";
+import type { AnalysisDetail, Stage } from "@/types/analysis-view";
 
-export const metadata: Metadata = { title: "Resultado del análisis" };
-export const dynamic = "force-dynamic";
+const t = messages.analysis;
 
-/** Si un análisis lleva más de esto "procesando", se asume que la función serverless murió. */
-const MINUTOS_PARA_CONSIDERAR_ATASCADO = 4;
+/** After this long "processing", the analysis is considered stuck (the backend worker died). */
+const STUCK_AFTER_MINUTES = 4;
 
-const TEXTO_REGENERAR: Record<Etapa, string> = {
-  resumen: "Regenerar resumen",
-  lineas: "Regenerar explicación",
-  diagrama: "Regenerar diagramas",
-  glosario: "Generar glosario",
-  auditoria: "Auditar código",
-  quiz: "Generar quiz",
-};
+type Params = { params: Promise<{ id: string }>; searchParams: Promise<{ cache?: string; l?: string }> };
 
-export default async function AnalysisPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ cache?: string; l?: string }>;
-}) {
+/** The title in the tab. getAnalysis is wrapped in React's cache: the page reuses this same call. */
+export async function generateMetadata({ params }: Pick<Params, "params">): Promise<Metadata> {
+  const analysis = await getAnalysis((await params).id);
+  return { title: analysis?.title ?? t.metaTitle };
+}
+
+function missingStages(a: AnalysisDetail): Stage[] {
+  const v = a.view;
+  const missing: [boolean, Stage][] = [
+    [!v.summary, "summary"],
+    [v.blocks.length === 0, "lines"],
+    [v.diagrams.length === 0, "diagram"],
+    [v.concepts.length === 0, "glossary"],
+    [!a.audited, "audit"],
+    [!v.quiz, "quiz"],
+  ];
+  return missing.filter(([isMissing]) => isMissing).map(([, stage]) => stage);
+}
+
+/**
+ * The analysis: SSR (private, per user) + Client Components. The server fetches the analysis with the
+ * user's token and renders the static parts; the viewer hydrates for the interactive ones. The analysis
+ * and its chat are requested in parallel; loading.tsx streams a skeleton while they arrive.
+ */
+export default async function AnalysisPage({ params, searchParams }: Params) {
   const [{ id }, { cache, l }] = await Promise.all([params, searchParams]);
-  const session = await auth();
-  if (!session?.user?.id) redirect(`/login?callbackUrl=/analysis/${id}`);
+  const [analysis, chatMessages] = await Promise.all([getAnalysis(id), listChatMessages(id)]);
+  // Missing or someone else's: the backend answers NOT_FOUND for both, so nothing leaks.
+  if (!analysis) notFound();
 
-  // Filtrar por usuarioId evita que un usuario vea análisis ajenos (si no es suyo, responde 404).
-  const cargado = await cargarAnalisis({ id, usuarioId: session.user.id }, { usuarioQuiz: session.user.id, incluirQuiz: true });
-  if (!cargado) notFound();
-  const { analisis, vista } = cargado;
-  const mensajesChat = await listarMensajes(analisis.id, session.user.id);
-  const focoInicial = rangoDesdeParametro(l, vista.codigo.split("\n").length);
-
-  const minutos = (Date.now() - analisis.creadoEn.getTime()) / 60_000;
-  const procesando = analisis.estado === "PROCESANDO" && minutos < MINUTOS_PARA_CONSIDERAR_ATASCADO;
-  const atascado = analisis.estado === "PROCESANDO" && !procesando;
-  const faltantes = (
-    [
-      !vista.resumen && "resumen",
-      vista.bloques.length === 0 && "lineas",
-      vista.diagramas.length === 0 && "diagrama",
-      vista.conceptos.length === 0 && "glosario",
-      !analisis.auditadoEn && "auditoria",
-      !vista.quiz && "quiz",
-    ] as const
-  ).filter((x): x is Etapa => Boolean(x));
+  const levelLabel = messages.labels.level[analysis.level].label;
+  const minutes = (Date.now() - new Date(analysis.createdAt).getTime()) / 60_000;
+  const processing = analysis.status === "PROCESSING" && minutes < STUCK_AFTER_MINUTES;
+  const stuck = analysis.status === "PROCESSING" && !processing;
+  const missing = missingStages(analysis);
+  const initialFocus = spanFromParam(l, countLines(analysis.view.code));
 
   return (
     <div className="container space-y-6 py-8">
-      {procesando && <AutoRefresh />}
+      {processing && <AutoRefresh />}
 
       <div className="space-y-3">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/dashboard">
-            <ArrowLeft /> Historial
+            <ArrowLeft /> {t.backToHistory}
           </Link>
         </Button>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-2">
-            <h1 className="break-words vd-title text-3xl sm:text-4xl">{analisis.titulo}</h1>
+            <h1 className="vd-title break-words text-3xl sm:text-4xl">{analysis.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-              <Badge variant="outline">{languageLabel(analisis.lenguaje)}</Badge>
-              <Badge variant="outline">Nivel {NIVEL_INFO[analisis.nivel].label.toLowerCase()}</Badge>
-              <span>{formatearFecha(analisis.creadoEn)}</span>
+              <Badge variant="outline">{languageLabel(analysis.view.language)}</Badge>
+              <Badge variant="outline">{t.level(levelLabel)}</Badge>
+              <span>{formatDateTime(analysis.createdAt)}</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <AccionesAnalisis analisisId={analisis.id} tokenInicial={analisis.tokenPublico} />
-            <DeleteAnalysisButton id={analisis.id} redirigirA="/dashboard" />
+            <AnalysisActions analysisId={analysis.id} initialToken={analysis.shareToken} />
+            <DeleteAnalysisButton id={analysis.id} redirectTo="/dashboard" />
           </div>
         </div>
       </div>
 
-      {(cache === "1" || analisis.origenCacheId) && !procesando && (
-        <Alert variant="info" title="Resultado recuperado de la caché">
-          Este mismo código ya se había analizado con el nivel {NIVEL_INFO[analisis.nivel].label.toLowerCase()}, así que se reutilizó el resultado al
-          instante: no se llamó a la IA ni se descontó de tu límite diario. Si quieres una explicación nueva, marca «Ignorar caché» al analizar.
+      {cache === "1" && !processing && (
+        <Alert variant="info" title={t.cacheTitle}>
+          {t.cacheBody(levelLabel)}
         </Alert>
       )}
 
-      {procesando && (
-        <Alert variant="info" title="Este análisis todavía se está procesando">
-          Se actualizará solo en unos segundos.
+      {processing && (
+        <Alert variant="info" title={t.processingTitle}>
+          {t.processingBody}
         </Alert>
       )}
 
-      {(atascado || analisis.estado === "ERROR" || (analisis.estado === "COMPLETO" && faltantes.length > 0 && analisis.errorMensaje)) && (
-        <Alert variant="error" title={analisis.estado === "ERROR" || atascado ? "El análisis no se pudo completar" : "Algunas secciones no se pudieron generar"}>
-          <p>{analisis.errorMensaje ?? "El proceso se interrumpió antes de terminar."}</p>
-          {faltantes.length > 0 && (
+      {(stuck || analysis.status === "FAILED" || (analysis.status === "COMPLETED" && missing.length > 0 && analysis.errorMessage)) && (
+        <Alert variant="error" title={analysis.status === "FAILED" || stuck ? t.failedTitle : t.partialTitle}>
+          <p>{analysis.errorMessage ?? t.interrupted}</p>
+          {missing.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
-              {faltantes.map((etapa) => (
-                <RegenerarEtapa key={etapa} analisisId={analisis.id} etapa={etapa}>
-                  {TEXTO_REGENERAR[etapa]}
-                </RegenerarEtapa>
+              {missing.map((stage) => (
+                <RegenerateStageButton key={stage} analysisId={analysis.id} stage={stage}>
+                  {t.regenerate[stage]}
+                </RegenerateStageButton>
               ))}
             </div>
           )}
         </Alert>
       )}
 
-      <AnalysisViewer analisisId={analisis.id} datos={vista} auditado={analisis.auditadoEn !== null} mensajesChat={mensajesChat} focoInicial={focoInicial} />
+      <AnalysisViewer analysisId={analysis.id} view={analysis.view} audited={analysis.audited} chatMessages={chatMessages} initialFocus={initialFocus} />
     </div>
   );
 }

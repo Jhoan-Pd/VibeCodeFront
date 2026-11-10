@@ -3,17 +3,20 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-/** Refresca la página cada pocos segundos (para análisis que aún se están procesando en el servidor). */
-export function AutoRefresh({ cadaMs = 4000, maxVeces = 20 }: { cadaMs?: number; maxVeces?: number }) {
+/**
+ * Re-renders the Server Component tree every few seconds (router.refresh keeps client state) while an
+ * analysis is still being processed on the server. Stops after `maxTimes` refreshes.
+ */
+export function AutoRefresh({ everyMs = 4000, maxTimes = 20 }: { everyMs?: number; maxTimes?: number }) {
   const router = useRouter();
   useEffect(() => {
-    let veces = 0;
+    let times = 0;
     const id = setInterval(() => {
-      veces += 1;
+      times += 1;
       router.refresh();
-      if (veces >= maxVeces) clearInterval(id);
-    }, cadaMs);
+      if (times >= maxTimes) clearInterval(id);
+    }, everyMs);
     return () => clearInterval(id);
-  }, [router, cadaMs, maxVeces]);
+  }, [router, everyMs, maxTimes]);
   return null;
 }

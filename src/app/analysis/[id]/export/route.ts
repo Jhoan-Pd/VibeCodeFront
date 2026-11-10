@@ -1,31 +1,39 @@
-import { conUsuario, jsonError } from "@/lib/api";
-import { urlPublica } from "@/lib/compartir";
-import { aMarkdown, nombreArchivo } from "@/lib/exportar";
-import { cargarAnalisis } from "@/services/vista.service";
+import { NextResponse } from "next/server";
+import { messages } from "@/i18n";
+import { fileName, toMarkdown } from "@/lib/markdown-export";
+import { getAnalysis } from "@/lib/rpc/queries";
+import { NoSessionError } from "@/lib/rpc/server";
+import { publicUrl } from "@/lib/share";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/analysis/:id/exportar — descarga el análisis completo en Markdown (.md). */
-export const GET = conUsuario<{ id: string }>(async ({ req, usuarioId, params: { id } }) => {
-  const cargado = await cargarAnalisis({ id, usuarioId }, { usuarioQuiz: null, incluirQuiz: true });
-  if (!cargado) return jsonError("Análisis no encontrado", 404);
-  const { analisis, vista } = cargado;
+/** GET /analysis/:id/export — downloads the whole analysis as Markdown (.md), built from GetAnalysis. */
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  let analysis;
+  try {
+    analysis = await getAnalysis(id);
+  } catch (e) {
+    if (e instanceof NoSessionError) return NextResponse.json({ error: messages.errors.sessionExpired }, { status: 401 });
+    throw e;
+  }
+  if (!analysis) return NextResponse.json({ error: messages.errors.notFound }, { status: 404 });
 
-  const md = aMarkdown(vista, {
-    titulo: analisis.titulo,
-    nivel: analisis.nivel,
-    creadoEn: analisis.creadoEn,
-    enlace: analisis.tokenPublico ? urlPublica(new URL(req.url).origin, analisis.tokenPublico) : null,
+  const markdown = toMarkdown(analysis.view, {
+    title: analysis.title,
+    level: analysis.level,
+    createdAt: new Date(analysis.createdAt),
+    link: analysis.shareToken ? publicUrl(new URL(req.url).origin, analysis.shareToken) : null,
   });
-  const archivo = nombreArchivo(analisis.titulo, "md");
+  const name = fileName(analysis.title, "md");
 
-  return new Response(md, {
+  return new Response(markdown, {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
-      // filename* con UTF-8 por si el navegador lo usa; filename simple ASCII como respaldo.
-      "content-disposition": `attachment; filename="${archivo}"; filename*=UTF-8''${encodeURIComponent(archivo)}`,
+      // filename* in UTF-8 for browsers that use it; a plain ASCII filename as the fallback.
+      "content-disposition": `attachment; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`,
       "cache-control": "private, no-store",
       "x-content-type-options": "nosniff",
     },
   });
-});
+}

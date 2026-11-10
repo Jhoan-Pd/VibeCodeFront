@@ -1,77 +1,77 @@
+import { InlineCodeText } from "@/components/inline-code-text";
 import { MermaidDiagram } from "@/components/mermaid-diagram";
-import { TextoConCodigo } from "@/components/texto-con-codigo";
+import { messages } from "@/i18n";
 import { languageLabel } from "@/lib/language";
-import { NIVEL_INFO, type NivelUsuario } from "@/schemas/common";
-import { TIPO_PREGUNTA_INFO } from "@/schemas/quiz";
-import { DIAGRAMA_INFO, HALLAZGO_INFO, SEVERIDAD_INFO, type AnalisisVista } from "@/schemas/vista";
-import { formatearFechaCorta } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
+import type { AnalysisView, Level } from "@/types/analysis-view";
 
-const rango = (inicio: number | null, fin: number | null) => (inicio == null ? null : fin == null || fin === inicio ? `L${inicio}` : `L${inicio}–${fin}`);
+const t = messages.exportMarkdown;
+const { labels } = messages;
+const range = (start: number | null, end: number | null) => (start == null ? null : messages.common.lineRange(start, end));
 
-/** Código con números de línea (una fila por línea; las filas no se parten entre páginas). */
-function CodigoNumerado({ codigo, desde = 1 }: { codigo: string; desde?: number }) {
-  const lineas = codigo.split("\n");
-  const ancho = String(desde + lineas.length - 1).length;
+/** Code with line numbers (one row per line; rows never split across pages). */
+function NumberedCode({ code, from = 1 }: { code: string; from?: number }) {
+  const lines = code.split("\n");
+  const width = String(from + lines.length - 1).length;
   return (
     <pre className="overflow-x-auto rounded-md border bg-muted/40 p-3 font-mono text-[11px] leading-[1.55] print:overflow-visible print:whitespace-pre-wrap">
-      {lineas.map((l, i) => (
+      {lines.map((line, i) => (
         <div key={i} className="flex break-inside-avoid">
-          <span className="mr-3 shrink-0 select-none text-right text-muted-foreground" style={{ width: `${ancho}ch` }}>
-            {desde + i}
+          <span className="mr-3 shrink-0 select-none text-right text-muted-foreground" style={{ width: `${width}ch` }}>
+            {from + i}
           </span>
-          <span className="whitespace-pre-wrap break-all">{l || " "}</span>
+          <span className="whitespace-pre-wrap break-all">{line || " "}</span>
         </div>
       ))}
     </pre>
   );
 }
 
-function Seccion({ titulo, children, nuevaPagina = false }: { titulo: string; children: React.ReactNode; nuevaPagina?: boolean }) {
+function Section({ title, children, newPage = false }: { title: string; children: React.ReactNode; newPage?: boolean }) {
   return (
-    <section className={nuevaPagina ? "space-y-3 print:break-before-page" : "space-y-3"}>
-      <h2 className="border-b pb-1 text-lg font-semibold">{titulo}</h2>
+    <section className={newPage ? "space-y-3 print:break-before-page" : "space-y-3"}>
+      <h2 className="border-b pb-1 text-lg font-semibold">{title}</h2>
       {children}
     </section>
   );
 }
 
 /**
- * Documento imprimible del análisis (para "Guardar como PDF"). Sin Monaco ni pestañas: todo el
- * contenido en orden de lectura. El quiz va sin respuestas, igual que en la exportación Markdown.
+ * Printable document of the analysis (for "Save as PDF"). No Monaco nor tabs: all the content in reading
+ * order. The quiz goes without answers, as in the Markdown export. A Server Component: only the diagrams
+ * hydrate (Mermaid draws in the browser).
  */
-export function VistaImpresion({ datos, titulo, nivel, creadoEn }: { datos: AnalisisVista; titulo: string; nivel: NivelUsuario; creadoEn: Date }) {
-  const lineas = datos.codigo.split("\n");
+export function PrintView({ view, title, level, createdAt }: { view: AnalysisView; title: string; level: Level; createdAt: string }) {
+  const lines = view.code.split("\n");
   return (
     <article className="mx-auto max-w-4xl space-y-8 text-sm leading-relaxed">
       <header className="space-y-1">
-        <h1 className="vd-title text-3xl">{titulo}</h1>
-        <p className="text-muted-foreground">
-          {languageLabel(datos.lenguaje)} · nivel {NIVEL_INFO[nivel].label.toLowerCase()} · {formatearFechaCorta(creadoEn)} · generado con VibeDecoder
-        </p>
+        <h1 className="vd-title text-3xl">{title}</h1>
+        <p className="text-muted-foreground">{messages.print.subtitle(languageLabel(view.language), labels.level[level].label, formatDate(createdAt))}</p>
       </header>
 
-      {datos.resumen && (
-        <Seccion titulo="Resumen">
+      {view.summary && (
+        <Section title={t.summary}>
           <p>
-            <TextoConCodigo texto={datos.resumen.proposito} />
+            <InlineCodeText text={view.summary.purpose} />
           </p>
           <div className="grid gap-4 sm:grid-cols-3">
             {(
               [
-                ["Entradas", datos.resumen.entradas],
-                ["Salidas", datos.resumen.salidas],
-                ["Dependencias", datos.resumen.dependencias],
+                [t.inputs, view.summary.inputs],
+                [t.outputs, view.summary.outputs],
+                [t.dependencies, view.summary.dependencies],
               ] as const
-            ).map(([t, items]) => (
-              <div key={t}>
-                <p className="font-medium">{t}</p>
+            ).map(([heading, items]) => (
+              <div key={heading}>
+                <p className="font-medium">{heading}</p>
                 {items.length === 0 ? (
-                  <p className="text-muted-foreground">Ninguna</p>
+                  <p className="text-muted-foreground">{messages.viewer.summary.none}</p>
                 ) : (
                   <ul className="list-disc pl-5">
-                    {items.map((i) => (
-                      <li key={i}>
-                        <TextoConCodigo texto={i} />
+                    {items.map((item) => (
+                      <li key={item}>
+                        <InlineCodeText text={item} />
                       </li>
                     ))}
                   </ul>
@@ -79,109 +79,109 @@ export function VistaImpresion({ datos, titulo, nivel, creadoEn }: { datos: Anal
               </div>
             ))}
           </div>
-        </Seccion>
+        </Section>
       )}
 
-      <Seccion titulo="Código">
-        <CodigoNumerado codigo={datos.codigo} />
-      </Seccion>
+      <Section title={t.code}>
+        <NumberedCode code={view.code} />
+      </Section>
 
-      {datos.bloques.length > 0 && (
-        <Seccion titulo="Explicación por bloques">
+      {view.blocks.length > 0 && (
+        <Section title={t.blocks}>
           <div className="space-y-5">
-            {datos.bloques.map((b, i) => (
+            {view.blocks.map((b, i) => (
               <div key={i} className="space-y-2">
                 <h3 className="font-semibold">
-                  <span className="mr-2 font-mono text-xs text-muted-foreground">{rango(b.lineaInicio, b.lineaFin)}</span>
-                  {b.titulo}
+                  <span className="mr-2 font-mono text-xs text-muted-foreground">{range(b.lineStart, b.lineEnd)}</span>
+                  {b.title}
                 </h3>
-                <CodigoNumerado codigo={lineas.slice(b.lineaInicio - 1, b.lineaFin).join("\n")} desde={b.lineaInicio} />
+                <NumberedCode code={lines.slice(b.lineStart - 1, b.lineEnd).join("\n")} from={b.lineStart} />
                 <p>
-                  <TextoConCodigo texto={b.explicacion} />
+                  <InlineCodeText text={b.explanation} />
                 </p>
               </div>
             ))}
           </div>
-        </Seccion>
+        </Section>
       )}
 
-      {datos.diagramas.length > 0 && (
-        <Seccion titulo="Diagramas" nuevaPagina>
-          {datos.diagramas.map((d) => (
-            <div key={d.tipo} className="break-inside-avoid space-y-2">
+      {view.diagrams.length > 0 && (
+        <Section title={t.diagrams} newPage>
+          {view.diagrams.map((d) => (
+            <div key={d.kind} className="break-inside-avoid space-y-2">
               <h3 className="font-semibold">
-                {DIAGRAMA_INFO[d.tipo]}: {d.titulo}
+                {labels.diagramKind[d.kind]}: {d.title}
               </h3>
-              <MermaidDiagram codigo={d.mermaid} tipo={d.tipo} />
+              <MermaidDiagram source={d.mermaid} kind={d.kind} />
             </div>
           ))}
-        </Seccion>
+        </Section>
       )}
 
-      {datos.conceptos.length > 0 && (
-        <Seccion titulo="Glosario">
+      {view.concepts.length > 0 && (
+        <Section title={t.glossary}>
           <dl className="space-y-2">
-            {datos.conceptos.map((c) => (
-              <div key={c.nombre} className="break-inside-avoid">
+            {view.concepts.map((c) => (
+              <div key={c.name} className="break-inside-avoid">
                 <dt className="font-semibold">
-                  {c.nombre} {rango(c.lineaInicio, c.lineaFin) && <span className="font-mono text-xs font-normal text-muted-foreground">({rango(c.lineaInicio, c.lineaFin)})</span>}
+                  {c.name} {range(c.lineStart, c.lineEnd) && <span className="font-mono text-xs font-normal text-muted-foreground">({range(c.lineStart, c.lineEnd)})</span>}
                 </dt>
                 <dd>
-                  <TextoConCodigo texto={c.explicacion} />
+                  <InlineCodeText text={c.explanation} />
                 </dd>
               </div>
             ))}
           </dl>
-        </Seccion>
+        </Section>
       )}
 
-      <Seccion titulo="Auditoría de vibe code">
-        {datos.hallazgos.length === 0 ? (
-          <p className="text-muted-foreground">Sin hallazgos.</p>
+      <Section title={t.audit}>
+        {view.findings.length === 0 ? (
+          <p className="text-muted-foreground">{t.noFindings}</p>
         ) : (
           <div className="space-y-3">
-            {datos.hallazgos.map((h, i) => (
+            {view.findings.map((f, i) => (
               <div key={i} className="break-inside-avoid rounded-md border p-3">
                 <p className="font-semibold">
-                  [{SEVERIDAD_INFO[h.severidad].label}] {h.titulo}
+                  [{labels.severity[f.severity]}] {f.title}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {HALLAZGO_INFO[h.tipo]}
-                  {rango(h.lineaInicio, h.lineaFin) && ` · ${rango(h.lineaInicio, h.lineaFin)}`}
+                  {labels.findingKind[f.kind]}
+                  {range(f.lineStart, f.lineEnd) && ` · ${range(f.lineStart, f.lineEnd)}`}
                 </p>
                 <p className="mt-1">
-                  <TextoConCodigo texto={h.descripcion} />
+                  <InlineCodeText text={f.description} />
                 </p>
                 <p className="mt-1">
-                  <strong>Sugerencia:</strong> <TextoConCodigo texto={h.sugerencia} />
+                  <strong>{t.suggestion}:</strong> <InlineCodeText text={f.suggestion} />
                 </p>
               </div>
             ))}
           </div>
         )}
-      </Seccion>
+      </Section>
 
-      {datos.quiz && datos.quiz.preguntas.length > 0 && (
-        <Seccion titulo="Quiz de autoevaluación" nuevaPagina>
-          <p className="text-muted-foreground">Las respuestas no se incluyen: respóndelo en VibeDecoder para recibir la calificación.</p>
+      {view.quiz && view.quiz.questions.length > 0 && (
+        <Section title={t.quiz} newPage>
+          <p className="text-muted-foreground">{t.quizNoAnswers.replaceAll("_", "")}</p>
           <ol className="list-decimal space-y-3 pl-5">
-            {datos.quiz.preguntas.map((p) => (
-              <li key={p.id} className="break-inside-avoid">
+            {view.quiz.questions.map((q) => (
+              <li key={q.id} className="break-inside-avoid">
                 <p>
-                  <span className="text-xs text-muted-foreground">{TIPO_PREGUNTA_INFO[p.tipo]} · </span>
-                  <TextoConCodigo texto={p.enunciado} />
+                  <span className="text-xs text-muted-foreground">{labels.questionKind[q.kind]} · </span>
+                  <InlineCodeText text={q.prompt} />
                 </p>
                 <ul className="mt-1 list-[circle] pl-5">
-                  {(p.tipo === "VERDADERO_FALSO" ? ["Verdadero", "Falso"] : (p.opciones ?? [])).map((o) => (
+                  {(q.kind === "TRUE_FALSE" ? [labels.trueFalse.true, labels.trueFalse.false] : (q.options ?? [])).map((o) => (
                     <li key={o}>
-                      <TextoConCodigo texto={o} />
+                      <InlineCodeText text={o} />
                     </li>
                   ))}
                 </ul>
               </li>
             ))}
           </ol>
-        </Seccion>
+        </Section>
       )}
     </article>
   );

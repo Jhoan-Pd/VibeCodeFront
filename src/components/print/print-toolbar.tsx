@@ -4,37 +4,38 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { messages } from "@/i18n";
 
 /**
- * Barra de la vista para imprimir (no sale en el papel). Mientras está montada fuerza el modo claro
- * para que Mermaid dibuje los diagramas con fondo blanco; al salir restaura el tema del usuario.
- * "Guardar como PDF" lo hace el diálogo de impresión del navegador: sin dependencias pesadas en el servidor.
+ * Toolbar of the print view (not printed). While mounted it forces light mode so Mermaid draws the
+ * diagrams on white; on unmount it restores the person's theme. "Save as PDF" is the browser's print
+ * dialog: no heavy PDF dependency on the server.
  */
-export function BarraImpresion({ volverA }: { volverA: string }) {
-  const [listo, setListo] = useState(false);
+export function PrintToolbar({ backTo }: { backTo: string }) {
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const html = document.documentElement;
-    const eraOscuro = html.classList.contains("dark");
+    const wasDark = html.classList.contains("dark");
     html.classList.remove("dark");
-    // Espera a que Mermaid termine de dibujar en modo claro antes de habilitar el botón.
-    const t = setTimeout(() => setListo(true), 800);
+    // Waits for Mermaid to finish drawing in light mode before enabling the button.
+    const t = setTimeout(() => setReady(true), 800);
     return () => {
       clearTimeout(t);
-      if (eraOscuro) html.classList.add("dark");
+      if (wasDark) html.classList.add("dark");
     };
   }, []);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 p-3 print:hidden">
       <Button asChild variant="ghost" size="sm">
-        <Link href={volverA}>
-          <ArrowLeft /> Volver
+        <Link href={backTo}>
+          <ArrowLeft /> {messages.common.back}
         </Link>
       </Button>
-      <p className="text-sm text-muted-foreground">En el diálogo de impresión elige «Guardar como PDF».</p>
-      <Button size="sm" onClick={() => window.print()} disabled={!listo}>
-        <Printer /> Imprimir o guardar PDF
+      <p className="text-sm text-muted-foreground">{messages.print.hint}</p>
+      <Button size="sm" onClick={() => window.print()} disabled={!ready}>
+        <Printer /> {messages.print.action}
       </Button>
     </div>
   );
