@@ -2,120 +2,103 @@
 
 import { useState } from "react";
 import { ClipboardPaste, FileUp, Github } from "lucide-react";
-import { AjustesAnalisis } from "@/components/analizar/ajustes-analisis";
-import { FuenteArchivo } from "@/components/analizar/fuente-archivo";
-import { FuenteGist } from "@/components/analizar/fuente-gist";
-import { useAnalisis } from "@/components/analizar/use-analisis";
-import { useFuenteCodigo } from "@/components/analizar/use-fuente-codigo";
+import { AnalysisSettings } from "@/components/analyze/analysis-settings";
+import { FileSource } from "@/components/analyze/file-source";
+import { GistSource } from "@/components/analyze/gist-source";
+import { useAnalysis } from "@/components/analyze/use-analysis";
+import { useCodeSource } from "@/components/analyze/use-code-source";
 import { AnalysisProgress } from "@/components/analysis-progress";
-import { MonacoEditor, OPCIONES_EDITOR } from "@/components/code-editor";
+import { EDITOR_OPTIONS, MonacoEditor } from "@/components/code-editor";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, Spinner, Tabs } from "@/components/ui/misc";
+import { publicConfig } from "@/config/public";
 import { useIsDark } from "@/hooks/use-is-dark";
-import { MAX_CODE_CHARS } from "@/lib/config";
-import type { EstadoCupo } from "@/lib/limites";
-import { cn, formatearNumero } from "@/lib/utils";
-import type { NivelUsuario } from "@/schemas/common";
+import { messages } from "@/i18n";
+import { cn, formatNumber } from "@/lib/utils";
+import type { Level, QuotaView } from "@/types/analysis-view";
 
-const PESTANAS = [
-  { id: "pegar" as const, label: <><ClipboardPaste className="size-4" /> Pegar</> },
-  { id: "archivo" as const, label: <><FileUp className="size-4" /> Archivo</> },
-  { id: "gist" as const, label: <><Github className="size-4" /> Gist</> },
+const t = messages.analyze;
+
+const SOURCE_TABS = [
+  { id: "paste" as const, label: <><ClipboardPaste className="size-4" /> {t.sources.paste}</> },
+  { id: "file" as const, label: <><FileUp className="size-4" /> {t.sources.file}</> },
+  { id: "gist" as const, label: <><Github className="size-4" /> {t.sources.gist}</> },
 ];
 
 /**
- * Formulario de análisis. Compone dos hooks —de dónde sale el código (useFuenteCodigo) y el análisis
- * por streaming (useAnalisis)— con componentes de presentación para cada fuente y para los ajustes.
+ * The analysis form. It composes two hooks — where the code comes from (useCodeSource) and the streamed
+ * analysis (useAnalysis) — with presentational components for each source and for the settings.
  */
-export function AnalyzeForm({ nivelInicial, cupo }: { nivelInicial: NivelUsuario; cupo: EstadoCupo }) {
-  const oscuro = useIsDark();
-  const f = useFuenteCodigo();
-  const { fase, progreso, error, analizar } = useAnalisis();
-  const [nivel, setNivel] = useState<NivelUsuario>(nivelInicial);
-  const [forzar, setForzar] = useState(false);
+export function AnalyzeForm({ initialLevel, quota }: { initialLevel: Level; quota: QuotaView | null }) {
+  const dark = useIsDark();
+  const s = useCodeSource();
+  const { phase, progress, error, analyze } = useAnalysis();
+  const [level, setLevel] = useState<Level>(initialLevel);
+  const [force, setForce] = useState(false);
 
-  const largo = f.codigo.length;
-  const excede = largo > MAX_CODE_CHARS;
-  const vacio = f.codigo.trim().length < 3;
+  const length = s.code.length;
+  const tooLong = length > publicConfig.maxCodeChars;
+  const empty = s.code.trim().length < 3;
 
-  const iniciar = () => analizar({ codigo: f.codigo, lenguaje: f.lenguajeSel, nivel, titulo: f.titulo || undefined, forzar });
+  const start = () => analyze({ code: s.code, language: s.language, level, title: s.title || undefined, force });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      {/* ---------- Entrada de código ---------- */}
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3">
-          <Tabs value={f.fuente} onChange={f.setFuente} items={PESTANAS} />
-          <span className={cn("text-xs tabular-nums", excede ? "font-medium text-destructive" : "text-muted-foreground")} aria-live="polite">
-            {formatearNumero(largo)} / {formatearNumero(MAX_CODE_CHARS)} caracteres
+          <Tabs value={s.source} onChange={s.setSource} items={SOURCE_TABS} />
+          <span className={cn("text-xs tabular-nums", tooLong ? "font-medium text-destructive" : "text-muted-foreground")} aria-live="polite">
+            {t.charCount(formatNumber(length), formatNumber(publicConfig.maxCodeChars))}
           </span>
         </div>
 
-        {f.error && (
-          <Alert key={f.error} variant="error" className="vd-shake m-3">
-            {f.error}
+        {s.error && (
+          <Alert key={s.error} variant="error" className="vd-shake m-3">
+            {s.error}
           </Alert>
         )}
 
-        {f.fuente === "pegar" && (
+        {s.source === "paste" && (
           <div className="relative h-[52vh] min-h-[340px]">
-            <MonacoEditor
-              value={f.codigo}
-              language={f.lenguajeEfectivo}
-              theme={oscuro ? "vs-dark" : "light"}
-              options={OPCIONES_EDITOR}
-              onChange={(v) => f.editar(v ?? "")}
-            />
-            {largo === 0 && (
-              <p className="pointer-events-none absolute left-14 top-3 max-w-md text-sm text-muted-foreground/70">
-                Pega aquí el código que generó la IA y que no terminas de entender…
-              </p>
-            )}
+            <MonacoEditor value={s.code} language={s.effectiveLanguage} theme={dark ? "vs-dark" : "light"} options={EDITOR_OPTIONS} onChange={(v) => s.edit(v ?? "")} />
+            {length === 0 && <p className="pointer-events-none absolute left-14 top-3 max-w-md text-sm text-muted-foreground/70">{t.placeholder}</p>}
           </div>
         )}
 
-        {f.fuente === "archivo" && <FuenteArchivo onArchivo={(archivo) => void f.leerArchivo(archivo)} />}
+        {s.source === "file" && <FileSource onFile={(file) => void s.readFile(file)} />}
 
-        {f.fuente === "gist" && (
-          <FuenteGist
-            cargando={f.gistCargando}
-            archivos={f.gistArchivos}
-            onCargar={(url) => void f.cargarGist(url)}
-            onElegir={(a) => f.cargarCodigo(a.contenido, a.nombre)}
-          />
-        )}
+        {s.source === "gist" && <GistSource loading={s.gistLoading} files={s.gistFiles} onLoad={(url) => void s.loadGist(url)} onPick={(f) => s.loadCode(f.content, f.name)} />}
       </Card>
 
-      {/* ---------- Ajustes / progreso ---------- */}
       <Card className="h-fit">
-        {fase === "analizando" ? (
+        {phase === "analyzing" ? (
           <>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
-                <Spinner className="text-primary" /> Analizando tu código…
+                <Spinner className="text-primary" /> {t.analyzing}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <AnalysisProgress etapas={progreso.etapas} mensajes={progreso.mensajes} />
-              <p className="text-xs text-muted-foreground">Suele tardar entre 15 y 50 segundos según el tamaño del código. No cierres esta pestaña.</p>
+              <AnalysisProgress stages={progress.stages} stageMessages={progress.stageMessages} />
+              <p className="text-xs text-muted-foreground">{t.analyzingHint}</p>
             </CardContent>
           </>
         ) : (
-          <AjustesAnalisis
-            titulo={f.titulo}
-            onTitulo={f.setTitulo}
-            lenguaje={f.lenguajeSel}
-            onLenguaje={f.setLenguajeSel}
-            detectado={!vacio && f.lenguajeSel === "auto" ? f.detectado : null}
-            nivel={nivel}
-            onNivel={setNivel}
-            forzar={forzar}
-            onForzar={setForzar}
-            error={fase === "error" ? error : null}
-            cupo={cupo}
-            excede={excede}
-            puedeAnalizar={!vacio && !excede}
-            onAnalizar={iniciar}
+          <AnalysisSettings
+            title={s.title}
+            onTitle={s.setTitle}
+            language={s.language}
+            onLanguage={s.setLanguage}
+            detected={!empty && s.language === "auto" ? s.detected : null}
+            level={level}
+            onLevel={setLevel}
+            force={force}
+            onForce={setForce}
+            error={phase === "error" ? error : null}
+            quota={quota}
+            tooLong={tooLong}
+            canAnalyze={!empty && !tooLong}
+            onAnalyze={start}
           />
         )}
       </Card>

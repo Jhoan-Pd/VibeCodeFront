@@ -4,51 +4,37 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
+import { messages } from "@/i18n";
 import { languageLabel } from "@/lib/language";
-import type { GistArchivo } from "./use-fuente-codigo";
+import type { GistFileView } from "@/types/analysis-view";
 
-/** Carga un Gist público; si tiene varios archivos, deja elegir uno. */
-export function FuenteGist({
-  cargando,
-  archivos,
-  onCargar,
-  onElegir,
-}: {
-  cargando: boolean;
-  archivos: GistArchivo[];
-  onCargar: (url: string) => void;
-  onElegir: (a: GistArchivo) => void;
-}) {
+const t = messages.analyze.gist;
+
+/** Loads a public Gist; when it has several files, lets the person pick one. */
+export function GistSource({ loading, files, onLoad, onPick }: { loading: boolean; files: GistFileView[]; onLoad: (url: string) => void; onPick: (f: GistFileView) => void }) {
   const [url, setUrl] = useState("");
-  const puedeCargar = !cargando && url.trim() !== "";
+  const canLoad = !loading && url.trim() !== "";
 
   return (
     <div className="min-h-[300px] space-y-4 p-5">
       <div className="space-y-2">
-        <Label htmlFor="gist-url">URL de un Gist público</Label>
+        <Label htmlFor="gist-url">{t.urlLabel}</Label>
         <div className="flex gap-2">
-          <Input
-            id="gist-url"
-            inputMode="url"
-            placeholder="https://gist.github.com/usuario/…"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && puedeCargar && onCargar(url)}
-          />
-          <Button type="button" onClick={() => onCargar(url)} disabled={!puedeCargar}>
-            {cargando ? <Spinner /> : null} Cargar
+          <Input id="gist-url" inputMode="url" placeholder={t.placeholder} value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && canLoad && onLoad(url)} />
+          <Button type="button" onClick={() => onLoad(url)} disabled={!canLoad}>
+            {loading ? <Spinner /> : null} {t.load}
           </Button>
         </div>
       </div>
-      {archivos.length > 1 && (
+      {files.length > 1 && (
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Este Gist tiene varios archivos. Elige uno:</p>
+          <p className="text-sm text-muted-foreground">{t.pickFile}</p>
           <ul className="space-y-2">
-            {archivos.map((a) => (
-              <li key={a.nombre}>
-                <Button type="button" variant="outline" className="w-full justify-between" onClick={() => onElegir(a)}>
-                  <span className="truncate font-mono text-xs">{a.nombre}</span>
-                  <span className="text-xs text-muted-foreground">{languageLabel(a.lenguaje)}</span>
+            {files.map((f) => (
+              <li key={f.name}>
+                <Button type="button" variant="outline" className="w-full justify-between" onClick={() => onPick(f)}>
+                  <span className="truncate font-mono text-xs">{f.name}</span>
+                  <span className="text-xs text-muted-foreground">{languageLabel(f.language)}</span>
                 </Button>
               </li>
             ))}

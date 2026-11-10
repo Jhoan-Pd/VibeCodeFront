@@ -1,28 +1,25 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
 import { AnalyzeForm } from "@/components/analyze-form";
-import { usoDeHoy } from "@/services/limite.service";
-import { obtenerUsuario } from "@/services/usuarios";
+import { messages } from "@/i18n";
+import { getProfile, getQuota } from "@/lib/rpc/queries";
 
-export const metadata: Metadata = { title: "Nuevo análisis" };
-export const dynamic = "force-dynamic";
+const t = messages.analyze;
 
+export const metadata: Metadata = { title: t.metaTitle };
+
+/** New analysis: SSR for the person's default level and today's quota; the form itself is a Client Component. */
 export default async function AnalyzePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login?callbackUrl=/analyze");
-  const [usuario, uso] = await Promise.all([obtenerUsuario(session.user.id), usoDeHoy(session.user.id)]);
-  if (!usuario) redirect("/login");
+  const [user, quota] = await Promise.all([getProfile(), getQuota().catch(() => null)]);
+  if (!user) redirect("/login");
 
   return (
     <div className="container space-y-6 py-8">
       <div>
-        <h1 className="vd-title text-3xl sm:text-4xl">Nuevo análisis</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pega código, sube un archivo o importa un Gist. Nunca ejecutamos tu código: solo lo leemos y lo explicamos.
-        </p>
+        <h1 className="vd-title text-3xl sm:text-4xl">{t.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t.lead}</p>
       </div>
-      <AnalyzeForm nivelInicial={usuario.nivel} cupo={uso.analisis} />
+      <AnalyzeForm initialLevel={user.level} quota={quota?.analyses ?? null} />
     </div>
   );
 }

@@ -2,53 +2,57 @@
 
 import { useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AnalysisEvent } from "@/lib/analysis-events";
-import { analizarConStream, type AnalyzePayload } from "@/lib/client/analyze-stream";
-import { PROGRESO_INICIAL, aplicarEvento, desenlace } from "@/lib/client/progreso-analisis";
+import { applyEvent, INITIAL_PROGRESS, outcomeOf, type AnalysisProgress, type ProgressAction } from "@/lib/analysis-progress";
+import { streamAnalysis, type AnalyzeInput } from "@/lib/rpc/analyze-stream";
+import { rpcErrorMessage } from "@/lib/rpc/errors";
 
-export type Fase = "editando" | "analizando" | "error";
-type Accion = { tipo: "reiniciar" } | { tipo: "evento"; evento: AnalysisEvent };
+export type Phase = "editing" | "analyzing" | "error";
+type Action = { type: "reset" } | ProgressAction;
 
-function reducer(estado: typeof PROGRESO_INICIAL, accion: Accion) {
-  return accion.tipo === "reiniciar" ? PROGRESO_INICIAL : aplicarEvento(estado, accion.evento);
+function reducer(state: AnalysisProgress, action: Action): AnalysisProgress {
+  return action.type === "reset" ? INITIAL_PROGRESS : applyEvent(state, action);
 }
 
 /**
- * Ejecuta el análisis por streaming. El progreso lo calcula el reducer puro `aplicarEvento`; el
- * resultado final se decide con `desenlace` y este hook solo navega o muestra el error.
+ * Runs the analysis over the Analyze server stream. Progress comes from the pure `applyEvent` reducer,
+ * the final result from `outcomeOf`; this hook only navigates or shows the error.
  */
-export function useAnalisis() {
+export function useAnalysis() {
   const router = useRouter();
-  const [progreso, despachar] = useReducer(reducer, PROGRESO_INICIAL);
-  const [fase, setFase] = useState<Fase>("editando");
-  const [error, setError] = useState<{ mensaje: string; analisisId: string | null } | null>(null);
+  const [progress, dispatch] = useReducer(reducer, INITIAL_PROGRESS);
+  const [phase, setPhase] = useState<Phase>("editing");
+  const [error, setError] = useState<{ message: string; analysisId: string | null } | null>(null);
 
-  async function analizar(payload: AnalyzePayload) {
-    setFase("analizando");
+  async function analyze(input: AnalyzeInput) {
+    setPhase("analyzing");
     setError(null);
-    despachar({ tipo: "reiniciar" });
+    dispatch({ type: "reset" });
 
-    // El desenlace se calcula con los mismos eventos, en paralelo al estado de React (que es asíncrono).
-    let final = PROGRESO_INICIAL;
+    // The outcome is computed from the same events, alongside React's (asynchronous) state.
+    let final = INITIAL_PROGRESS;
     try {
-      await analizarConStream(payload, (evento) => {
-        final = aplicarEvento(final, evento);
-        despachar({ tipo: "evento", evento });
+      await streamAnalysis(input, (event) => {
+        final = applyEvent(final, event);
+        dispatch(event);
       });
-    } catch (err) {
-      setError({ mensaje: err instanceof Error ? err.message : "No se pudo iniciar el análisis.", analisisId: null });
-      setFase("error");
-      return;
+    } catch (e) {
+      // The connection dropped after the analysis was created: it keeps running on the server and the
+      // results page follows it. Before that, the failure is shown here.
+      if (final.analysisId && !final.outcome) {
+        router.push(`/analysis/${final.analysisId}`);
+        return;
+      }
+      final = applyEvent(final, { type: "transportError", message: rpcErrorMessage(e) });
     }
 
-    const d = desenlace(final);
-    if (d.tipo === "ir") {
-      router.push(d.url);
+    const outcome = outcomeOf(final);
+    if (outcome.kind === "open") {
+      router.push(outcome.url);
       return;
     }
-    setError({ mensaje: d.mensaje, analisisId: d.analisisId });
-    setFase("error");
+    setError({ message: outcome.message, analysisId: outcome.analysisId });
+    setPhase("error");
   }
 
-  return { fase, progreso, error, analizar };
+  return { phase, progress, error, analyze };
 }

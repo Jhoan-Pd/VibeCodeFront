@@ -1,97 +1,95 @@
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
-import { pedirJson } from "@/lib/client/api";
-import { MAX_CODE_CHARS } from "@/lib/config";
+import { publicConfig } from "@/config/public";
+import { messages } from "@/i18n";
 import { detectLanguage, type LanguageId } from "@/lib/language";
-import { formatearNumero } from "@/lib/utils";
+import { rpc } from "@/lib/rpc/browser";
+import { attempt } from "@/lib/rpc/errors";
+import { formatNumber } from "@/lib/utils";
+import type { GistFileView } from "@/types/analysis-view";
 
-export type Fuente = "pegar" | "archivo" | "gist";
-export interface GistArchivo {
-  nombre: string;
-  lenguaje: string;
-  contenido: string;
-}
+export type SourceKind = "paste" | "file" | "gist";
+
+const t = messages.analyze;
 
 /**
- * De dónde sale el código (editor, archivo o Gist) y el lenguaje detectado. La detección corre
- * sobre un valor diferido para no bloquear la escritura en el editor con textos largos.
+ * Where the code comes from (editor, file or Gist) and the detected language. Detection runs on a
+ * deferred value so long texts never block typing in the editor.
  */
-export function useFuenteCodigo() {
-  const [fuente, setFuente] = useState<Fuente>("pegar");
-  const [codigo, setCodigo] = useState("");
-  const [nombreArchivo, setNombreArchivo] = useState<string | undefined>();
-  const [lenguajeSel, setLenguajeSel] = useState<LanguageId | "auto">("auto");
-  const [titulo, setTitulo] = useState("");
+export function useCodeSource() {
+  const [source, setSource] = useState<SourceKind>("paste");
+  const [code, setCode] = useState("");
+  const [fileName, setFileName] = useState<string | undefined>();
+  const [language, setLanguage] = useState<LanguageId | "auto">("auto");
+  const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [gistCargando, setGistCargando] = useState(false);
-  const [gistArchivos, setGistArchivos] = useState<GistArchivo[]>([]);
+  const [gistLoading, setGistLoading] = useState(false);
+  const [gistFiles, setGistFiles] = useState<GistFileView[]>([]);
 
-  const codigoDiferido = useDeferredValue(codigo);
-  const detectado = useMemo(() => detectLanguage(codigoDiferido, nombreArchivo), [codigoDiferido, nombreArchivo]);
+  const deferredCode = useDeferredValue(code);
+  const detected = useMemo(() => detectLanguage(deferredCode, fileName), [deferredCode, fileName]);
 
-  function cargarCodigo(texto: string, nombre?: string) {
-    setCodigo(texto);
-    setNombreArchivo(nombre);
-    if (nombre && !titulo) setTitulo(nombre);
-    setLenguajeSel("auto");
-    setFuente("pegar");
+  function loadCode(text: string, name?: string) {
+    setCode(text);
+    setFileName(name);
+    if (name && !title) setTitle(name);
+    setLanguage("auto");
+    setSource("paste");
   }
 
-  function editar(texto: string) {
-    setCodigo(texto);
-    if (!texto) setNombreArchivo(undefined);
+  function edit(text: string) {
+    setCode(text);
+    if (!text) setFileName(undefined);
   }
 
-  async function leerArchivo(file: File) {
+  async function readFile(file: File) {
     setError(null);
-    // Un carácter ocupa hasta 4 bytes en UTF-8: por encima de eso seguro excede el máximo.
-    if (file.size > MAX_CODE_CHARS * 4) {
-      setError(`El archivo es demasiado grande. El máximo son ${formatearNumero(MAX_CODE_CHARS)} caracteres.`);
+    // A character takes up to 4 bytes in UTF-8: above that it surely exceeds the maximum.
+    if (file.size > publicConfig.maxCodeChars * 4) {
+      setError(t.file.tooBig(formatNumber(publicConfig.maxCodeChars)));
       return;
     }
-    const texto = await file.text();
-    if (texto.includes("\u0000")) {
-      setError("Ese archivo parece binario. Sube un archivo de código de texto.");
+    const text = await file.text();
+    if (text.includes("\u0000")) {
+      setError(t.file.binary);
       return;
     }
-    cargarCodigo(texto, file.name);
+    loadCode(text, file.name);
   }
 
-  async function cargarGist(url: string) {
+  /** ImportGist runs on the backend (only gist.github.com, anti-SSRF); the browser just asks for it. */
+  async function loadGist(url: string) {
     setError(null);
-    setGistArchivos([]);
-    setGistCargando(true);
-    const r = await pedirJson<{ archivos: GistArchivo[] }>(`/api/gist?url=${encodeURIComponent(url.trim())}`, {
-      metodo: "GET",
-      errorPorDefecto: "No se pudo leer el Gist.",
-    });
-    setGistCargando(false);
+    setGistFiles([]);
+    setGistLoading(true);
+    const r = await attempt(() => rpc.gist.importGist({ url: url.trim() }));
+    setGistLoading(false);
     if (!r.ok) {
-      setError(r.error);
+      setError(r.error || t.gist.failed);
       return;
     }
-    const { archivos } = r.datos;
-    if (archivos.length === 1) cargarCodigo(archivos[0].contenido, archivos[0].nombre);
-    else setGistArchivos(archivos);
+    const files = r.data.files.map((f) => ({ name: f.name, language: f.language, content: f.content }));
+    if (files.length === 1) loadCode(files[0].content, files[0].name);
+    else setGistFiles(files);
   }
 
   return {
-    fuente,
-    setFuente,
-    codigo,
-    editar,
-    cargarCodigo,
-    lenguajeSel,
-    setLenguajeSel,
-    detectado,
-    lenguajeEfectivo: lenguajeSel === "auto" ? detectado : lenguajeSel,
-    titulo,
-    setTitulo,
+    source,
+    setSource,
+    code,
+    edit,
+    loadCode,
+    language,
+    setLanguage,
+    detected,
+    effectiveLanguage: language === "auto" ? detected : language,
+    title,
+    setTitle,
     error,
-    leerArchivo,
-    cargarGist,
-    gistCargando,
-    gistArchivos,
+    readFile,
+    loadGist,
+    gistLoading,
+    gistFiles,
   };
 }

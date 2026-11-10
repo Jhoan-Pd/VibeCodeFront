@@ -1,27 +1,27 @@
 import { AlertTriangle, CheckCircle2, Circle } from "lucide-react";
-import { ETAPAS_UI } from "@/lib/analysis-events";
 import { Spinner } from "@/components/ui/misc";
-import type { Etapa } from "@/schemas/analysis";
+import { messages } from "@/i18n";
+import type { StageState } from "@/lib/analysis-progress";
+import { STAGES, type Stage } from "@/types/analysis-view";
 
-import type { EstadoEtapa } from "@/lib/client/progreso-analisis";
-
-/** Indicador de progreso por etapas (resumen, líneas, diagramas, glosario, auditoría y quiz) alimentado por el stream del servidor. */
-export function AnalysisProgress({ etapas, mensajes }: { etapas: Record<Etapa, EstadoEtapa>; mensajes?: Partial<Record<Etapa, string>> }) {
+/** Per-stage progress (summary, lines, diagrams, glossary, audit and quiz) fed by the Analyze stream. */
+export function AnalysisProgress({ stages, stageMessages }: { stages: Record<Stage, StageState>; stageMessages?: Partial<Record<Stage, string>> }) {
   return (
-    <ol className="space-y-3" aria-live="polite" aria-label="Progreso del análisis">
-      {ETAPAS_UI.map((e) => {
-        const estado = etapas[e.id];
+    <ol className="space-y-3" aria-live="polite" aria-label={messages.analyze.progressLabel}>
+      {STAGES.map((stage) => {
+        const state = stages[stage];
+        const { label, detail } = messages.labels.stage[stage];
         return (
-          <li key={e.id} className="flex items-start gap-3">
+          <li key={stage} className="flex items-start gap-3">
             <span className="mt-0.5 flex size-5 items-center justify-center">
-              {estado === "done" && <CheckCircle2 className="vd-check-in size-5 text-success" />}
-              {estado === "running" && <Spinner className="size-4 text-primary" />}
-              {estado === "error" && <AlertTriangle className="vd-shake size-5 text-destructive" />}
-              {estado === "pendiente" && <Circle className="size-5 text-muted-foreground/50" />}
+              {state === "done" && <CheckCircle2 className="vd-check-in size-5 text-success" />}
+              {state === "running" && <Spinner className="size-4 text-primary" />}
+              {state === "failed" && <AlertTriangle className="vd-shake size-5 text-destructive" />}
+              {state === "pending" && <Circle className="size-5 text-muted-foreground/50" />}
             </span>
             <div>
-              <p className={estado === "pendiente" ? "text-sm text-muted-foreground" : "text-sm font-medium"}>{e.label}</p>
-              <p className="text-xs text-muted-foreground">{estado === "error" && mensajes?.[e.id] ? mensajes[e.id] : e.detalle}</p>
+              <p className={state === "pending" ? "text-sm text-muted-foreground" : "text-sm font-medium"}>{label}</p>
+              <p className="text-xs text-muted-foreground">{state === "failed" && stageMessages?.[stage] ? stageMessages[stage] : detail}</p>
             </div>
           </li>
         );
