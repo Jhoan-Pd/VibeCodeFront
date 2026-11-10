@@ -2,56 +2,62 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { NivelSelector } from "@/components/nivel-selector";
+import { useSession } from "next-auth/react";
+import { LevelSelector } from "@/components/level-selector";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Alert, Spinner } from "@/components/ui/misc";
-import type { NivelUsuario } from "@/schemas/common";
-import { pedirJson } from "@/lib/client/api";
+import { messages } from "@/i18n";
+import { rpc } from "@/lib/rpc/browser";
+import { attempt } from "@/lib/rpc/errors";
+import { toProtoLevel } from "@/lib/rpc/mappers";
+import type { Level } from "@/types/analysis-view";
 
-export function PerfilForm({ nombreInicial, nivelInicial, email }: { nombreInicial: string; nivelInicial: NivelUsuario; email: string }) {
+const t = messages.profile;
+
+export function ProfileForm({ initialName, initialLevel, email }: { initialName: string; initialLevel: Level; email: string }) {
   const router = useRouter();
-  const [nombre, setNombre] = useState(nombreInicial);
-  const [nivel, setNivel] = useState(nivelInicial);
-  const [cargando, setCargando] = useState(false);
-  const [mensaje, setMensaje] = useState<{ tipo: "success" | "error"; texto: string } | null>(null);
+  const { update } = useSession();
+  const [name, setName] = useState(initialName);
+  const [level, setLevel] = useState(initialLevel);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState<{ variant: "success" | "error"; text: string } | null>(null);
 
-  async function guardar(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
-    setCargando(true);
-    setMensaje(null);
-    const r = await pedirJson("/api/perfil", {
-      metodo: "PATCH",
-      cuerpo: { nivel, ...(nombre.trim().length >= 2 ? { nombre: nombre.trim() } : {}) },
-      errorPorDefecto: "No se pudo guardar.",
-    });
-    setCargando(false);
+    setLoading(true);
+    setNotice(null);
+    const trimmed = name.trim();
+    const r = await attempt(() => rpc.user.updateProfile({ level: toProtoLevel(level), name: trimmed.length >= 2 ? trimmed : undefined }));
+    setLoading(false);
     if (!r.ok) {
-      setMensaje({ tipo: "error", texto: r.error });
+      setNotice({ variant: "error", text: r.error || t.failed });
       return;
     }
-    setMensaje({ tipo: "success", texto: "Perfil actualizado. Tus próximos análisis usarán este nivel." });
+    setNotice({ variant: "success", text: t.saved });
+    // The navbar shows the name from the session: refresh it, then the server components.
+    await update();
     router.refresh();
   }
 
   return (
-    <form onSubmit={guardar} className="space-y-6">
-      {mensaje && <Alert variant={mensaje.tipo}>{mensaje.texto}</Alert>}
+    <form onSubmit={save} className="space-y-6">
+      {notice && <Alert variant={notice.variant}>{notice.text}</Alert>}
       <div className="space-y-2">
-        <Label htmlFor="email">Correo</Label>
+        <Label htmlFor="email">{messages.auth.fields.email}</Label>
         <Input id="email" value={email} disabled readOnly />
       </div>
       <div className="space-y-2">
-        <Label htmlFor="nombre">Nombre</Label>
-        <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} />
+        <Label htmlFor="name">{t.name}</Label>
+        <Input id="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
       </div>
       <div className="space-y-2">
-        <Label>Tu nivel de programación</Label>
-        <p className="text-xs text-muted-foreground">Las explicaciones se adaptan a este nivel. Puedes cambiarlo en cada análisis.</p>
-        <NivelSelector value={nivel} onChange={setNivel} />
+        <Label>{t.level}</Label>
+        <p className="text-xs text-muted-foreground">{t.levelHint}</p>
+        <LevelSelector value={level} onChange={setLevel} />
       </div>
-      <Button type="submit" disabled={cargando}>
-        {cargando && <Spinner />} Guardar cambios
+      <Button type="submit" disabled={loading}>
+        {loading && <Spinner />} {t.submit}
       </Button>
     </form>
   );
