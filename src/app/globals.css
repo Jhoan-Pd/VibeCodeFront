@@ -3,29 +3,29 @@
 @tailwind utilities;
 
 /*
- * Tokens de color (formato HSL de shadcn/ui). Paleta tomada como referencia de twain.ai:
- * fondo casi blanco, texto grafito, títulos azul marino y un azul único para las acciones.
- * Ver docs/HANDOFF-UI.md. El modo claro es el predeterminado; .dark lo activa el botón de tema.
+ * Colour tokens (shadcn/ui HSL format). Palette inspired by twain.ai: near-white background,
+ * graphite text, navy headings and a single blue for actions. See docs/ui-handoff.md.
+ * Light mode is the default; the theme button toggles .dark.
  */
 @layer base {
   :root {
     --background: 0 0% 99%; /* #FCFCFC */
     --foreground: 223 14% 10%; /* #16181D */
-    --heading: 205 74% 9%; /* #061A28: títulos en serif */
+    --heading: 205 74% 9%; /* #061A28: serif headings */
     --card: 0 0% 100%;
     --card-foreground: 223 14% 10%;
-    --primary: 220 68% 48%; /* #275FCE: botones y enlaces */
+    --primary: 220 68% 48%; /* #275FCE: buttons and links */
     --primary-hover: 219 70% 37%;
     --primary-active: 215 70% 26%;
     --primary-foreground: 0 0% 100%;
-    --contrast: 200 10% 19%; /* botón oscuro secundario (grafito) */
+    --contrast: 200 10% 19%; /* secondary dark button (graphite) */
     --contrast-hover: 210 11% 15%;
     --contrast-foreground: 180 7% 92%;
     --secondary: 180 3% 95%;
     --secondary-foreground: 223 14% 10%;
     --muted: 180 3% 95%;
     --muted-foreground: 205 7% 34%;
-    --accent: 215 70% 26%; /* código en línea y énfasis */
+    --accent: 215 70% 26%; /* inline code and emphasis */
     --accent-foreground: 0 0% 100%;
     --destructive: 354 62% 47%;
     --destructive-foreground: 0 0% 100%;
@@ -34,7 +34,7 @@
     --input: 210 9% 86%;
     --ring: 220 68% 48%;
     --radius: 0.75rem;
-    /* Sombras en capas: dan relieve sin bordes duros. */
+    /* Layered shadows: depth without hard borders. */
     --shadow-btn: 0 6px 16px -8px hsl(209 73% 16% / 0.08), 0 3px 8px -4px hsl(209 73% 16% / 0.06), 0 1px 3px -1px hsl(209 73% 16% / 0.04),
       inset 0 -1px 0 1px hsl(219 69% 37% / 0.32), inset 0 1px 2px -1px hsl(0 0% 100% / 0.32);
     --shadow-btn-hover: 0 6px 32px -12px hsl(209 73% 16% / 0.16), 0 4px 12px -4px hsl(209 73% 16% / 0.08), 0 2px 4px -2px hsl(209 73% 16% / 0.04),
@@ -42,10 +42,10 @@
     --shadow-contrast: 0 8px 16px -8px hsl(223 14% 10% / 0.12), inset 0 1px 2px -1px hsl(0 0% 100% / 0.2), inset 0 -1px 0 1px hsl(223 14% 10% / 0.4);
     --shadow-card: 0 1px 0 0 hsl(213 70% 26% / 0.02), 0 0 0 1px hsl(213 70% 26% / 0.04), 0 1px 8px -4px hsl(213 70% 26% / 0.06),
       0 4px 12px -6px hsl(213 70% 26% / 0.06);
-    /* Movimiento */
+    /* Motion */
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-out-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
-    /* Rebote leve al presionar (cubic-bezier de los botones de la referencia). */
+    /* Slight bounce on press (the reference's button cubic-bezier). */
     --ease-spring: cubic-bezier(0.34, 1.35, 0.64, 1);
   }
 
@@ -101,7 +101,7 @@
 }
 
 @layer components {
-  /* Títulos en serif, peso normal y tracking negativo: la jerarquía la da el tamaño, no el grosor. */
+  /* Serif headings, regular weight and negative tracking: size, not weight, sets the hierarchy. */
   .vd-title {
     @apply font-display font-normal text-heading;
     letter-spacing: -0.02em;
@@ -109,7 +109,7 @@
   }
 }
 
-/* Resaltado sincronizado en Monaco (línea completa + marca en el margen). */
+/* Synchronised highlight in Monaco (whole line + gutter mark). */
 .vd-hl-line {
   background: hsl(var(--primary) / 0.16);
 }
@@ -117,15 +117,15 @@
   border-left: 3px solid hsl(var(--primary));
   margin-left: 3px;
 }
-/* Rango enfocado desde el glosario, la auditoría, el quiz o el chat. */
-.vd-foco-line {
+/* Range focused from the glossary, the audit, the quiz or the chat. */
+.vd-focus-line {
   background: hsl(38 92% 50% / 0.18);
 }
-.vd-foco-gutter {
+.vd-focus-gutter {
   border-left: 3px solid hsl(38 92% 50%);
   margin-left: 3px;
 }
-/* Marca tenue para las líneas que tienen explicación. */
+/* Faint mark on lines that have an explanation. */
 .vd-has-explanation {
   border-left: 2px solid hsl(var(--primary) / 0.28);
   margin-left: 4px;
@@ -138,8 +138,8 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Movimiento (inspirado en twain.ai): entradas cortas de "subir y aparecer",
- * curvas de salida suaves y nada que dure más de ~0,8 s. Ver docs/HANDOFF-UI.md.
+ * Motion (inspired by twain.ai): short "rise and fade in" entrances, soft ease-out curves
+ * and nothing longer than ~0.8 s. See docs/ui-handoff.md.
  * ------------------------------------------------------------------------- */
 @keyframes vd-slide-up-fade {
   from {
@@ -178,28 +178,28 @@
   }
 }
 
-/* Entrada del hero: líneas que suben 32 px, escalonadas con --vd-delay. */
+/* Hero entrance: lines rise 32 px, staggered with --vd-delay. */
 .vd-enter {
   --vd-from: 32px;
   animation: vd-slide-up-fade 0.8s var(--ease-out-expo) both;
   animation-delay: var(--vd-delay, 0ms);
 }
-/* Elementos que aparecen en la interfaz (mensajes, resultados): 6 px, rápido. */
+/* Elements that appear in the UI (messages, results): 6 px, fast. */
 .vd-pop {
   animation: vd-slide-up-fade 0.24s var(--ease-out-soft) both;
 }
-/* Paneles desplegables (compartir): bajan 6 px. */
+/* Drop-down panels (share): move down 6 px. */
 .vd-drop {
   animation: vd-slide-down-fade 0.18s var(--ease-out-soft) both;
 }
-/* Cambio de pestaña. */
+/* Tab change. */
 .vd-fade {
   animation: vd-fade-in 0.2s ease-out both;
 }
 
-/* --- Animaciones de la referencia aplicadas a funciones concretas (ver docs/HANDOFF-UI.md) --- */
+/* --- Reference animations applied to specific features (see docs/ui-handoff.md) --- */
 
-/* Tarjetas que entran escalonadas (auditoría y glosario): «warnings-card-enter», 24 px. */
+/* Cards entering staggered (audit and glossary): "warnings-card-enter", 24 px. */
 @keyframes vd-card-enter {
   from {
     opacity: 0;
@@ -215,7 +215,7 @@
   animation-delay: var(--vd-delay, 0ms);
 }
 
-/* Marca de completado que «cae» en su sitio: «checkbox-check-in» (escala 1,8 → 1). */
+/* Completion mark that "drops" into place: "checkbox-check-in" (scale 1.8 → 1). */
 @keyframes vd-check-in {
   from {
     opacity: 0;
@@ -230,7 +230,7 @@
   animation: vd-check-in 0.15s ease-in-out both;
 }
 
-/* Latido corto para confirmar una acción (copiado): «icon-pulse» (1 → 1,25 → 1). */
+/* Short pulse confirming an action (copied): "icon-pulse" (1 → 1.25 → 1). */
 @keyframes vd-pulse {
   0%,
   100% {
@@ -244,7 +244,7 @@
   animation: vd-pulse 0.3s ease-out;
 }
 
-/* Sacudida vertical breve para errores de formulario: «vertical-shake» (±6 px). */
+/* Brief vertical shake for form errors: "vertical-shake" (±6 px). */
 @keyframes vd-shake {
   0% {
     transform: translateY(6px);
@@ -263,7 +263,7 @@
   animation: vd-shake 0.3s ease-out;
 }
 
-/* El ícono de enviar (un avión de papel) sale volando y vuelve uno nuevo desde abajo. */
+/* The send icon (a paper plane) flies away and a new one comes back from below. */
 @keyframes vd-send-fly {
   0% {
     transform: none;
@@ -286,30 +286,30 @@
   animation: vd-send-fly 0.7s var(--ease-out-expo);
 }
 
-/* Respuesta nueva del chat: sus partes (párrafos, listas, código) aparecen una tras otra, como «animated-text». */
-.vd-partes > * {
+/* New chat answer: its parts (paragraphs, lists, code) appear one after another, like "animated-text". */
+.vd-parts > * {
   animation: vd-slide-up-fade 0.35s var(--ease-out-soft) both;
 }
-.vd-partes > :nth-child(2) {
+.vd-parts > :nth-child(2) {
   animation-delay: 90ms;
 }
-.vd-partes > :nth-child(3) {
+.vd-parts > :nth-child(3) {
   animation-delay: 180ms;
 }
-.vd-partes > :nth-child(4) {
+.vd-parts > :nth-child(4) {
   animation-delay: 270ms;
 }
-.vd-partes > :nth-child(n + 5) {
+.vd-parts > :nth-child(n + 5) {
   animation-delay: 360ms;
 }
 
-/* Desplegables (<details>): el contenido baja 6 px al abrirse, como «collapsible-open». */
+/* Disclosures (<details>): the content moves down 6 px when opened, like "collapsible-open". */
 details[open] > :not(summary) {
   animation: vd-slide-down-fade 0.15s ease-out;
 }
 
-/* Aparición al hacer scroll. Solo se oculta si hay JavaScript (clase en <html>), así nada queda invisible sin JS. */
-.vd-js [data-revelar] {
+/* Reveal on scroll. Only hidden when JavaScript runs (class on <html>), so nothing stays invisible without JS. */
+.vd-js [data-reveal] {
   opacity: 0;
   transform: translateY(14px);
   transition:
@@ -317,12 +317,12 @@ details[open] > :not(summary) {
     transform 0.8s var(--ease-out-expo);
   transition-delay: var(--vd-delay, 0ms);
 }
-.vd-js [data-revelar].vd-visible {
+.vd-js [data-reveal].vd-visible {
   opacity: 1;
   transform: none;
 }
 
-/* Botones: color, fondo y sombra en 150 ms; al presionar se encogen al 97 % y vuelven con un rebote leve. */
+/* Buttons: colour, background and shadow in 150 ms; on press they shrink to 97 % and bounce back. */
 .vd-btn {
   transition:
     color 0.15s ease-out,
@@ -335,7 +335,7 @@ details[open] > :not(summary) {
   transform: scale(0.97);
 }
 
-/* Esqueleto de carga con brillo que recorre la barra (en vez de parpadear). */
+/* Loading skeleton with a shimmer across the bar (instead of blinking). */
 .vd-skeleton {
   position: relative;
   overflow: hidden;
@@ -348,8 +348,8 @@ details[open] > :not(summary) {
   animation: vd-shimmer 1.4s ease-in-out infinite;
 }
 
-/* Palabra que cambia en el título: capas superpuestas del ancho de la más larga (así las máscaras
-   coinciden). La opacidad, las máscaras y el desenfoque los anima JS (requestAnimationFrame). */
+/* Changing word in the title: stacked layers as wide as the longest word (so the masks line up).
+   Opacity, masks and blur are animated from JS (requestAnimationFrame). */
 .vd-morph {
   display: inline-grid;
   justify-items: stretch;
@@ -360,8 +360,8 @@ details[open] > :not(summary) {
   will-change: opacity, filter, mask-image;
 }
 
-/* Avión de papel que cruza la palabra: posicionado desde la esquina de la palabra y movido con transform. */
-.vd-avion {
+/* Paper plane crossing the word: positioned from the word's corner and moved with transform. */
+.vd-plane {
   position: absolute;
   left: 0;
   top: 0;
@@ -379,16 +379,16 @@ details[open] > :not(summary) {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .vd-js [data-revelar] {
+  .vd-js [data-reveal] {
     opacity: 1;
     transform: none;
   }
-  .vd-avion {
+  .vd-plane {
     display: none;
   }
 }
 
-/* Impresión / "Guardar como PDF": márgenes de página y sin fondos oscuros ni sombras. */
+/* Print / "Save as PDF": page margins, no dark backgrounds nor shadows. */
 @media print {
   @page {
     margin: 16mm 14mm;

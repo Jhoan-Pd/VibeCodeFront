@@ -3,23 +3,24 @@
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsDark } from "@/hooks/use-is-dark";
+import { messages } from "@/i18n";
 
 export function ThemeToggle() {
-  const oscuro = useIsDark();
+  const dark = useIsDark();
 
-  function alternar() {
-    const siguienteOscuro = !oscuro;
-    document.documentElement.classList.toggle("dark", siguienteOscuro);
+  function toggle() {
+    const nextDark = !dark;
+    document.documentElement.classList.toggle("dark", nextDark);
     try {
-      localStorage.setItem("vd-theme", siguienteOscuro ? "dark" : "light");
+      localStorage.setItem("vd-theme", nextDark ? "dark" : "light");
     } catch {
-      /* almacenamiento no disponible: el cambio vale solo para esta visita */
+      /* storage unavailable: the change lasts for this visit only */
     }
   }
 
   return (
-    <Button variant="ghost" size="icon" onClick={alternar} aria-label={oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}>
-      {oscuro ? <Sun /> : <Moon />}
+    <Button variant="ghost" size="icon" onClick={toggle} aria-label={dark ? messages.shell.theme.toLight : messages.shell.theme.toDark}>
+      {dark ? <Sun /> : <Moon />}
     </Button>
   );
 }

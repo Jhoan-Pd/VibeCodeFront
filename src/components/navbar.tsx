@@ -1,12 +1,22 @@
+"use client";
+
 import Link from "next/link";
 import { LogOut, ScanSearch } from "lucide-react";
-import { auth, signOut } from "@/auth";
+import { signOut, useSession } from "next-auth/react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { messages } from "@/i18n";
+import { clearBackendToken } from "@/lib/rpc/browser";
 
-export async function Navbar() {
-  const session = await auth();
-  const usuario = session?.user;
+const t = messages.shell.nav;
+
+/**
+ * Client island: it reads the session in the browser, so the pages around it can be static.
+ * While the session loads the actions keep their space (no layout shift).
+ */
+export function Navbar() {
+  const { data: session, status } = useSession();
+  const user = session?.user;
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur print:hidden">
@@ -15,42 +25,45 @@ export async function Navbar() {
           <span className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <ScanSearch className="size-4" />
           </span>
-          VibeDecoder
+          {messages.common.appName}
         </Link>
 
-        <nav className="flex items-center gap-1 sm:gap-2" aria-label="Principal">
-          {usuario ? (
+        <nav className="flex items-center gap-1 sm:gap-2" aria-label={t.label} aria-busy={status === "loading"}>
+          {status === "loading" ? (
+            <span className="h-8 w-40" aria-hidden />
+          ) : user ? (
             <>
               <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-                <Link href="/dashboard">Historial</Link>
+                <Link href="/dashboard">{t.history}</Link>
               </Button>
               <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-                <Link href="/progreso">Progreso</Link>
+                <Link href="/progress">{t.progress}</Link>
               </Button>
               <Button asChild size="sm" variant="contrast">
-                <Link href="/analyze">Nuevo análisis</Link>
+                <Link href="/analyze">{t.newAnalysis}</Link>
               </Button>
               <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
-                <Link href="/perfil">{usuario.name ?? "Perfil"}</Link>
+                <Link href="/profile">{user.name ?? t.profile}</Link>
               </Button>
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/" });
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={t.signOut}
+                onClick={() => {
+                  clearBackendToken();
+                  void signOut({ redirectTo: "/" });
                 }}
               >
-                <Button variant="ghost" size="icon" type="submit" aria-label="Cerrar sesión">
-                  <LogOut />
-                </Button>
-              </form>
+                <LogOut />
+              </Button>
             </>
           ) : (
             <>
               <Button asChild variant="ghost" size="sm">
-                <Link href="/login">Entrar</Link>
+                <Link href="/login">{t.signIn}</Link>
               </Button>
               <Button asChild size="sm" variant="contrast">
-                <Link href="/register">Crear cuenta</Link>
+                <Link href="/register">{t.signUp}</Link>
               </Button>
             </>
           )}

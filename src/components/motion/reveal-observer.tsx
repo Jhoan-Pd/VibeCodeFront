@@ -4,48 +4,47 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
 /**
- * Hace aparecer al entrar en pantalla todo elemento con el atributo `data-revelar`
- * (el estilo vive en globals.css). Se monta una vez en el layout, vuelve a buscar elementos
- * en cada cambio de ruta y vigila los que se agregan después. Si el navegador no tiene
- * IntersectionObserver, los muestra todos de inmediato.
+ * Reveals every element with the `data-reveal` attribute when it scrolls into view (the style lives in
+ * globals.css). Mounted once in the layout; it looks for elements again on every route change and
+ * watches the ones added later. Without IntersectionObserver everything is shown right away.
  */
-export function ObservadorRevelar() {
-  const ruta = usePathname();
+export function RevealObserver() {
+  const pathname = usePathname();
 
   useEffect(() => {
-    const sinObservador = !("IntersectionObserver" in window);
-    const observador = sinObservador
-      ? null
-      : new IntersectionObserver(
-          (entradas) => {
-            for (const entrada of entradas) {
-              if (!entrada.isIntersecting) continue;
-              entrada.target.classList.add("vd-visible");
-              observador?.unobserve(entrada.target);
-            }
-          },
-          { threshold: 0, rootMargin: "0px 0px -24px 0px" },
-        );
+    const observer =
+      "IntersectionObserver" in window
+        ? new IntersectionObserver(
+            (entries) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                entry.target.classList.add("vd-visible");
+                observer?.unobserve(entry.target);
+              }
+            },
+            { threshold: 0, rootMargin: "0px 0px -24px 0px" },
+          )
+        : null;
 
-    const vigilar = (raiz: ParentNode) => {
-      raiz.querySelectorAll<HTMLElement>("[data-revelar]:not(.vd-visible)").forEach((el) => {
-        if (observador) observador.observe(el);
+    const watch = (root: ParentNode) => {
+      root.querySelectorAll<HTMLElement>("[data-reveal]:not(.vd-visible)").forEach((el) => {
+        if (observer) observer.observe(el);
         else el.classList.add("vd-visible");
       });
     };
-    vigilar(document);
+    watch(document);
 
-    // Elementos que aparecen después (contenido cargado en el cliente) también se vigilan, para que nunca queden ocultos.
-    const mutaciones = new MutationObserver((cambios) => {
-      for (const c of cambios) c.addedNodes.forEach((n) => n instanceof HTMLElement && (n.matches("[data-revelar]") ? vigilar(n.parentElement ?? document) : vigilar(n)));
+    // Elements rendered later (client-loaded content) are watched too, so they never stay hidden.
+    const mutations = new MutationObserver((changes) => {
+      for (const c of changes) c.addedNodes.forEach((n) => n instanceof HTMLElement && (n.matches("[data-reveal]") ? watch(n.parentElement ?? document) : watch(n)));
     });
-    mutaciones.observe(document.body, { childList: true, subtree: true });
+    mutations.observe(document.body, { childList: true, subtree: true });
 
     return () => {
-      observador?.disconnect();
-      mutaciones.disconnect();
+      observer?.disconnect();
+      mutations.disconnect();
     };
-  }, [ruta]);
+  }, [pathname]);
 
   return null;
 }
