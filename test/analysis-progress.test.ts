@@ -1,41 +1,46 @@
 import { describe, expect, it } from "vitest";
-import type { AnalysisEvent } from "@/lib/analysis-events";
-import { PROGRESO_INICIAL, aplicarEvento, desenlace } from "@/lib/client/progreso-analisis";
+import { applyEvent, INITIAL_PROGRESS, outcomeOf, type ProgressAction } from "@/lib/analysis-progress";
 
-const reproducir = (eventos: AnalysisEvent[]) => eventos.reduce(aplicarEvento, PROGRESO_INICIAL);
+const replay = (events: ProgressAction[]) => events.reduce(applyEvent, INITIAL_PROGRESS);
 
-describe("reducer del progreso del análisis", () => {
-  it("un análisis completo lleva a la página de resultados", () => {
-    const p = reproducir([
-      { type: "start", analisisId: "a1" },
-      { type: "stage", etapa: "resumen", status: "running" },
-      { type: "stage", etapa: "resumen", status: "done" },
-      { type: "stage", etapa: "quiz", status: "error", message: "Límite" },
-      { type: "done", analisisId: "a1", estado: "COMPLETO" },
+describe("analysis progress reducer", () => {
+  it("a completed analysis opens the results page", () => {
+    const p = replay([
+      { type: "started", analysisId: "a1" },
+      { type: "stage", stage: "summary", status: "running", message: null },
+      { type: "stage", stage: "summary", status: "done", message: null },
+      { type: "stage", stage: "quiz", status: "failed", message: "Límite" },
+      { type: "finished", analysisId: "a1", status: "COMPLETED", message: null, fromCache: false },
     ]);
-    expect(p.etapas.resumen).toBe("done");
-    expect(p.etapas.quiz).toBe("error");
-    expect(p.etapas.lineas).toBe("pendiente");
-    expect(p.mensajes).toEqual({ quiz: "Límite" });
-    expect(desenlace(p)).toEqual({ tipo: "ir", url: "/analysis/a1" });
+    expect(p.stages.summary).toBe("done");
+    expect(p.stages.quiz).toBe("failed");
+    expect(p.stages.lines).toBe("pending");
+    expect(p.stageMessages).toEqual({ quiz: "Límite" });
+    expect(outcomeOf(p)).toEqual({ kind: "open", url: "/analysis/a1" });
   });
 
-  it("desde la caché añade ?cache=1", () => {
-    expect(desenlace(reproducir([{ type: "done", analisisId: "c", estado: "COMPLETO", desdeCache: true }]))).toEqual({ tipo: "ir", url: "/analysis/c?cache=1" });
+  it("a cache hit adds ?cache=1", () => {
+    const p = replay([{ type: "finished", analysisId: "c", status: "COMPLETED", message: null, fromCache: true }]);
+    expect(outcomeOf(p)).toEqual({ kind: "open", url: "/analysis/c?cache=1" });
   });
 
-  it("un error conserva el id para enlazar el análisis guardado", () => {
-    const p = reproducir([{ type: "start", analisisId: "x" }, { type: "error", message: "Sin cupo" }]);
-    expect(desenlace(p)).toEqual({ tipo: "error", mensaje: "Sin cupo", analisisId: "x" });
+  it("a failure keeps the id so the saved analysis can be linked", () => {
+    const p = replay([{ type: "started", analysisId: "x" }, { type: "finished", analysisId: "x", status: "FAILED", message: "Sin cupo", fromCache: false }]);
+    expect(outcomeOf(p)).toEqual({ kind: "error", message: "Sin cupo", analysisId: "x" });
   });
 
-  it("si el stream se corta sin id, avisa", () => {
-    expect(desenlace(PROGRESO_INICIAL)).toMatchObject({ tipo: "error", analisisId: null });
+  it("a transport error before the analysis exists is reported without an id", () => {
+    const p = replay([{ type: "transportError", message: "No hay conexión" }]);
+    expect(outcomeOf(p)).toEqual({ kind: "error", message: "No hay conexión", analysisId: null });
   });
 
-  it("no muta el estado anterior", () => {
-    const antes = PROGRESO_INICIAL;
-    aplicarEvento(antes, { type: "stage", etapa: "resumen", status: "done" });
-    expect(antes.etapas.resumen).toBe("pendiente");
+  it("warns when the stream ends without an id", () => {
+    expect(outcomeOf(INITIAL_PROGRESS)).toMatchObject({ kind: "error", analysisId: null });
+  });
+
+  it("does not mutate the previous state", () => {
+    const before = INITIAL_PROGRESS;
+    applyEvent(before, { type: "stage", stage: "summary", status: "done", message: null });
+    expect(before.stages.summary).toBe("pending");
   });
 });

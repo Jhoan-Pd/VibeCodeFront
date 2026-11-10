@@ -1,62 +1,60 @@
 import { describe, expect, it } from "vitest";
-import { DEMO_PREGUNTAS, DEMO_VISTA } from "@/lib/demo";
-import { aMarkdown, cerco, escaparLinea, nombreArchivo } from "@/lib/exportar";
-import type { AnalisisVista } from "@/schemas/vista";
+import { DEMO_QUESTIONS, DEMO_VIEW } from "@/lib/demo/analysis";
+import { escapeLine, fenceFor, fileName, toMarkdown } from "@/lib/markdown-export";
+import type { AnalysisView } from "@/types/analysis-view";
 
-const meta = { titulo: "Caché con TTL", nivel: "INTERMEDIO" as const, creadoEn: new Date("2026-10-08T12:00:00Z") };
+const meta = { title: "Caché con TTL", level: "INTERMEDIATE" as const, createdAt: new Date("2026-10-08T12:00:00Z") };
+const empty: AnalysisView = { code: "", language: "python", summary: null, blocks: [], diagrams: [], concepts: [], findings: [], quiz: null };
 
-describe("aMarkdown", () => {
-  const md = aMarkdown(DEMO_VISTA, meta);
+describe("toMarkdown", () => {
+  const md = toMarkdown(DEMO_VIEW, meta);
 
-  it("incluye todas las secciones del análisis", () => {
-    for (const seccion of ["# Caché con TTL", "## Resumen", "## Código", "## Explicación por bloques", "## Diagramas", "## Glosario", "## Auditoría de vibe code", "## Quiz de autoevaluación"]) {
-      expect(md).toContain(seccion);
+  it("includes every section of the analysis", () => {
+    for (const section of ["# Caché con TTL", "## Resumen", "## Código", "## Explicación por bloques", "## Diagramas", "## Glosario", "## Auditoría de vibe code", "## Quiz de autoevaluación"]) {
+      expect(md).toContain(section);
     }
     expect(md).toContain("nivel intermedio · 2026-10-08");
   });
 
-  it("los diagramas van en bloques mermaid y cada bloque cita su rango y su fragmento", () => {
-    expect(md.match(/```mermaid/g)?.length).toBe(DEMO_VISTA.diagramas.length);
-    const b = DEMO_VISTA.bloques[0];
-    expect(md).toContain(`### L${b.lineaInicio}${b.lineaFin === b.lineaInicio ? "" : `–${b.lineaFin}`}`);
-    expect(md).toContain(DEMO_VISTA.codigo.split("\n")[b.lineaInicio - 1]);
+  it("diagrams go in mermaid blocks and every block cites its range and snippet", () => {
+    expect(md.match(/```mermaid/g)?.length).toBe(DEMO_VIEW.diagrams.length);
+    const b = DEMO_VIEW.blocks[0];
+    expect(md).toContain(`### L${b.lineStart}${b.lineEnd === b.lineStart ? "" : `–${b.lineEnd}`}`);
+    expect(md).toContain(DEMO_VIEW.code.split("\n")[b.lineStart - 1]);
   });
 
-  it("nunca incluye las respuestas correctas del quiz", () => {
-    for (const p of DEMO_PREGUNTAS) expect(md).not.toContain(p.explicacion);
+  it("never includes the quiz answers", () => {
+    for (const q of DEMO_QUESTIONS) expect(md).not.toContain(q.explanation);
     expect(md).toContain("Las respuestas no se incluyen");
   });
 
-  it("conserva el código exacto, incluidas las líneas en blanco", () => {
-    const codigo = "a = 1\n\n\n\nb = 2";
-    const salida = aMarkdown({ ...vacio, codigo }, meta);
-    expect(salida).toContain(codigo);
+  it("keeps the exact code, blank lines included", () => {
+    const code = "a = 1\n\n\n\nb = 2";
+    expect(toMarkdown({ ...empty, code }, meta)).toContain(code);
   });
 
-  it("agrega el enlace público si existe y omite secciones vacías", () => {
-    const salida = aMarkdown({ ...vacio, codigo: "x" }, { ...meta, enlace: "https://app.test/c/abc" });
-    expect(salida).toContain("> Enlace público: https://app.test/c/abc");
-    expect(salida).not.toContain("## Glosario");
-    expect(salida).toContain("Sin hallazgos.");
+  it("adds the public link when there is one and skips empty sections", () => {
+    const out = toMarkdown({ ...empty, code: "x" }, { ...meta, link: "https://app.test/c/abc" });
+    expect(out).toContain("> Enlace público: https://app.test/c/abc");
+    expect(out).not.toContain("## Glosario");
+    expect(out).toContain("Sin hallazgos.");
   });
 });
 
-const vacio: AnalisisVista = { codigo: "", lenguaje: "python", resumen: null, bloques: [], diagramas: [], conceptos: [], hallazgos: [], quiz: null };
-
-describe("utilidades", () => {
-  it("el cerco es más largo que cualquier secuencia de comillas del contenido", () => {
-    expect(cerco("print('hola')")).toBe("```");
-    expect(cerco("texto ```js\nx\n```")).toBe("````");
-    expect(cerco("````")).toBe("`````");
+describe("helpers", () => {
+  it("the fence is longer than any backtick run in the content", () => {
+    expect(fenceFor("print('hola')")).toBe("```");
+    expect(fenceFor("texto ```js\nx\n```")).toBe("````");
+    expect(fenceFor("````")).toBe("`````");
   });
 
-  it("un título del LLM no puede inyectar estructura Markdown", () => {
-    expect(escaparLinea("# Hola\n## [link](x)")).toBe("\\# Hola \\#\\# \\[link\\](x)");
+  it("an LLM title cannot inject Markdown structure", () => {
+    expect(escapeLine("# Hola\n## [link](x)")).toBe("\\# Hola \\#\\# \\[link\\](x)");
   });
 
-  it("nombre de archivo seguro", () => {
-    expect(nombreArchivo("Caché con TTL (v2)!", "md")).toBe("cache-con-ttl-v2.md");
-    expect(nombreArchivo("···", "md")).toBe("analisis.md");
-    expect(nombreArchivo("../../etc/passwd", "md")).toBe("etc-passwd.md");
+  it("safe file names", () => {
+    expect(fileName("Caché con TTL (v2)!", "md")).toBe("cache-con-ttl-v2.md");
+    expect(fileName("···", "md")).toBe("analisis.md");
+    expect(fileName("../../etc/passwd", "md")).toBe("etc-passwd.md");
   });
 });

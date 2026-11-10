@@ -1,19 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { mensajeErrorAuth } from "@/lib/errores-auth";
+import { AUTH_ERROR, authErrorMessage } from "@/lib/auth-errors";
 
-describe("mensajeErrorAuth", () => {
-  it("sin código no muestra nada", () => {
-    expect(mensajeErrorAuth(undefined)).toBeNull();
-    expect(mensajeErrorAuth("")).toBeNull();
+describe("authErrorMessage", () => {
+  it("shows nothing without a code", () => {
+    expect(authErrorMessage(undefined)).toBeNull();
+    expect(authErrorMessage("")).toBeNull();
   });
-  it("explica el error de configuración y cómo resolverlo", () => {
-    expect(mensajeErrorAuth("Configuration")).toContain("AUTH_SECRET");
+
+  it("explains the configuration error and how to fix it", () => {
+    expect(authErrorMessage("Configuration")).toContain("AUTH_SECRET");
+    expect(authErrorMessage("Configuration")).toContain("BACKEND_JWT_SECRET");
   });
-  it("traduce los errores conocidos y da un mensaje genérico al resto", () => {
-    expect(mensajeErrorAuth("CredentialsSignin")).toBe("Correo o contraseña incorrectos.");
-    expect(mensajeErrorAuth("OAuthSignin")).toContain("Google o GitHub");
-    expect(mensajeErrorAuth("CorreoNoVerificado")).toContain("verifica el correo");
-    expect(mensajeErrorAuth("BaseNoDisponible")).toContain("base de datos no responde");
-    expect(mensajeErrorAuth("<script>")).toBe("No se pudo iniciar sesión. Inténtalo de nuevo.");
+
+  it("translates known errors and gives a generic message for the rest", () => {
+    expect(authErrorMessage("CredentialsSignin")).toBe("Correo o contraseña incorrectos.");
+    expect(authErrorMessage("OAuthSignin")).toContain("Google o GitHub");
+    expect(authErrorMessage(AUTH_ERROR.emailNotVerified)).toContain("verifica el correo");
+    expect(authErrorMessage(AUTH_ERROR.backendUnavailable)).toContain("no responde");
+    expect(authErrorMessage("<script>")).toBe("No se pudo iniciar sesión. Inténtalo de nuevo.");
   });
 });
