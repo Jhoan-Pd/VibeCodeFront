@@ -1,53 +1,57 @@
-import type { AnalysisEvent } from "@/lib/analysis-events";
-import { registroPorClave } from "@/lib/colecciones";
-import { ETAPAS, type Etapa } from "@/schemas/analysis";
+import { recordFromKeys } from "@/lib/collections";
+import { messages } from "@/i18n";
+import { STAGES, type AnalysisEvent, type Stage } from "@/types/analysis-view";
 
 /**
- * Estado del análisis en el navegador como un REDUCER puro: cada evento del stream produce un
- * estado nuevo. Probado con Vitest y sin React; el hook solo lo conecta con useReducer.
+ * Progress of an analysis in the browser as a pure REDUCER: every stream event yields a new state.
+ * Unit tested without React; the hook only plugs it into useReducer.
  */
 
-export type EstadoEtapa = "pendiente" | "running" | "done" | "error";
+export type StageState = "pending" | "running" | "done" | "failed";
 
-export interface ProgresoAnalisis {
-  analisisId: string | null;
-  etapas: Record<Etapa, EstadoEtapa>;
-  mensajes: Partial<Record<Etapa, string>>;
-  terminado: "COMPLETO" | "ERROR" | null;
-  mensaje?: string;
-  desdeCache?: boolean;
+export interface AnalysisProgress {
+  analysisId: string | null;
+  stages: Record<Stage, StageState>;
+  stageMessages: Partial<Record<Stage, string>>;
+  outcome: "COMPLETED" | "FAILED" | null;
+  message: string | null;
+  fromCache: boolean;
 }
 
-export const PROGRESO_INICIAL: ProgresoAnalisis = {
-  analisisId: null,
-  etapas: registroPorClave<Etapa, EstadoEtapa>(ETAPAS, () => "pendiente"),
-  mensajes: {},
-  terminado: null,
+export type ProgressAction = AnalysisEvent | { type: "transportError"; message: string };
+
+export const INITIAL_PROGRESS: AnalysisProgress = {
+  analysisId: null,
+  stages: recordFromKeys<Stage, StageState>(STAGES, () => "pending"),
+  stageMessages: {},
+  outcome: null,
+  message: null,
+  fromCache: false,
 };
 
-export function aplicarEvento(estado: ProgresoAnalisis, e: AnalysisEvent): ProgresoAnalisis {
+export function applyEvent(state: AnalysisProgress, e: ProgressAction): AnalysisProgress {
   switch (e.type) {
-    case "start":
-      return { ...estado, analisisId: e.analisisId };
+    case "started":
+      return { ...state, analysisId: e.analysisId };
     case "stage":
       return {
-        ...estado,
-        etapas: { ...estado.etapas, [e.etapa]: e.status },
-        mensajes: e.message ? { ...estado.mensajes, [e.etapa]: e.message } : estado.mensajes,
+        ...state,
+        stages: { ...state.stages, [e.stage]: e.status },
+        stageMessages: e.message ? { ...state.stageMessages, [e.stage]: e.message } : state.stageMessages,
       };
-    case "done":
-      return { ...estado, analisisId: e.analisisId, terminado: e.estado, mensaje: e.message, desdeCache: e.desdeCache };
-    case "error":
-      return { ...estado, terminado: "ERROR", mensaje: e.message };
+    case "finished":
+      return { ...state, analysisId: e.analysisId, outcome: e.status === "COMPLETED" ? "COMPLETED" : "FAILED", message: e.message, fromCache: e.fromCache };
+    case "transportError":
+      return { ...state, outcome: "FAILED", message: e.message };
   }
 }
 
-/** Qué hacer cuando termina el stream: ir a los resultados o mostrar el error (con enlace si quedó guardado). */
-export type Desenlace = { tipo: "ir"; url: string } | { tipo: "error"; mensaje: string; analisisId: string | null };
+/** What to do when the stream ends: open the results, or show the error (with a link if it was saved). */
+export type Outcome = { kind: "open"; url: string } | { kind: "error"; message: string; analysisId: string | null };
 
-export function desenlace(p: ProgresoAnalisis): Desenlace {
-  if (p.terminado === "ERROR") return { tipo: "error", mensaje: p.mensaje ?? "No se pudo analizar el código.", analisisId: p.analisisId };
-  // COMPLETO, o la conexión se cortó pero el análisis sigue en el servidor: la página de resultados se encarga.
-  if (p.analisisId) return { tipo: "ir", url: `/analysis/${p.analisisId}${p.desdeCache ? "?cache=1" : ""}` };
-  return { tipo: "error", mensaje: "La conexión se interrumpió. Revisa tu historial.", analisisId: null };
+export function outcomeOf(p: AnalysisProgress): Outcome {
+  if (p.outcome === "FAILED") return { kind: "error", message: p.message || messages.analyze.failed, analysisId: p.analysisId };
+  // COMPLETED, or the connection dropped while the analysis keeps running on the server: the results page handles it.
+  if (p.analysisId) return { kind: "open", url: `/analysis/${p.analysisId}${p.fromCache ? "?cache=1" : ""}` };
+  return { kind: "error", message: messages.analyze.connectionLost, analysisId: null };
 }

@@ -1,49 +1,45 @@
-import type { PreguntaPublica, RespuestaValor, ResultadoPregunta } from "@/schemas/quiz";
+import { messages } from "@/i18n";
+import type { AnswerValue, PublicQuestion, QuestionResult } from "@/types/analysis-view";
 
 /**
- * Lógica pura de la interfaz del quiz (sin React), probada con Vitest. El componente solo pinta;
- * aquí se decide el estado inicial, qué falta responder y cómo se describe una respuesta.
+ * Pure logic of the quiz UI (no React), unit tested. The component only paints; this decides the
+ * initial state, what is still unanswered and how an answer is described.
  */
 
-export type Respuestas = Record<string, RespuestaValor | null>;
-export type EstadoOpcion = "neutral" | "correcta" | "incorrecta";
+export type Answers = Record<string, AnswerValue | null>;
+export type OptionState = "neutral" | "correct" | "wrong";
 
-/** ORDENAR arranca con el orden mostrado (el servidor ya lo barajó); el resto, sin responder. */
-export function respuestasIniciales(preguntas: readonly PreguntaPublica[]): Respuestas {
-  return Object.fromEntries(preguntas.map((p) => [p.id, p.tipo === "ORDENAR" ? (p.opciones ?? []).map((_, i) => i) : null]));
+/** ORDERING starts with the displayed order (the server already shuffled it); the rest start unanswered. */
+export function initialAnswers(questions: readonly PublicQuestion[]): Answers {
+  return Object.fromEntries(questions.map((q) => [q.id, q.kind === "ORDERING" ? (q.options ?? []).map((_, i) => i) : null]));
 }
 
-export function contarSinResponder(preguntas: readonly PreguntaPublica[], respuestas: Respuestas): number {
-  return preguntas.reduce((n, p) => n + (respuestas[p.id] == null ? 1 : 0), 0);
+export function countUnanswered(questions: readonly PublicQuestion[], answers: Answers): number {
+  return questions.reduce((n, q) => n + (answers[q.id] == null ? 1 : 0), 0);
 }
 
-/** «Te falta 1 pregunta.» / «Te faltan 3 preguntas.» */
-export function textoFaltan(n: number): string {
-  return n === 1 ? "Te falta 1 pregunta." : `Te faltan ${n} preguntas.`;
+/** Swaps step `position` with its neighbour (`delta` = ±1). Returns the same array past the edges. */
+export function moveStep(order: readonly number[], position: number, delta: -1 | 1): readonly number[] {
+  const target = position + delta;
+  if (target < 0 || target >= order.length) return order;
+  const next = [...order];
+  [next[position], next[target]] = [next[target], next[position]];
+  return next;
 }
 
-/** Intercambia el paso `pos` con su vecino (`delta` = ±1). Devuelve el mismo arreglo si se sale de los bordes. */
-export function moverPaso(orden: readonly number[], pos: number, delta: -1 | 1): readonly number[] {
-  const destino = pos + delta;
-  if (destino < 0 || destino >= orden.length) return orden;
-  const nuevo = [...orden];
-  [nuevo[pos], nuevo[destino]] = [nuevo[destino], nuevo[pos]];
-  return nuevo;
+/** A, B, C… for the options. */
+export const optionLetter = (i: number) => String.fromCharCode(65 + i);
+
+/** How an option is painted once graded: the right one green, a wrong pick red. */
+export function optionState(result: QuestionResult | undefined, value: AnswerValue, picked: boolean): OptionState {
+  if (!result) return "neutral";
+  if (result.correctAnswer === value) return "correct";
+  return picked ? "wrong" : "neutral";
 }
 
-/** A, B, C… para las opciones. */
-export const letraOpcion = (i: number) => String.fromCharCode(65 + i);
-
-/** Cómo se pinta una opción una vez calificado: la correcta en verde, la elegida errónea en rojo. */
-export function estadoOpcion(resultado: ResultadoPregunta | undefined, valor: RespuestaValor, elegida: boolean): EstadoOpcion {
-  if (!resultado) return "neutral";
-  if (resultado.respuestaCorrecta === valor) return "correcta";
-  return elegida ? "incorrecta" : "neutral";
-}
-
-/** Texto legible de una respuesta (para «Respuesta correcta: …»). */
-export function describirRespuesta(p: Pick<PreguntaPublica, "opciones">, valor: RespuestaValor): string {
-  if (typeof valor === "boolean") return valor ? "Verdadero" : "Falso";
-  if (Array.isArray(valor)) return valor.map((i, n) => `${n + 1}) ${p.opciones?.[i] ?? "?"}`).join("  ");
-  return `${letraOpcion(valor)}. ${p.opciones?.[valor] ?? ""}`;
+/** Readable text of an answer (for "Respuesta correcta: …"). */
+export function describeAnswer(q: Pick<PublicQuestion, "options">, value: AnswerValue): string {
+  if (typeof value === "boolean") return value ? messages.labels.trueFalse.true : messages.labels.trueFalse.false;
+  if (Array.isArray(value)) return value.map((i, n) => `${n + 1}) ${q.options?.[i] ?? "?"}`).join("  ");
+  return `${optionLetter(value)}. ${q.options?.[value] ?? ""}`;
 }

@@ -215,3 +215,11 @@ export interface GistFileView {
   language: string;
   content: string;
 }
+
+export type StageStatus = "running" | "done" | "failed";
+
+/** One progress event of the Analyze stream, as the analysis screen consumes it. */
+export type AnalysisEvent =
+  | { type: "started"; analysisId: string }
+  | { type: "stage"; stage: Stage; status: StageStatus; message: string | null }
+  | { type: "finished"; analysisId: string; status: AnalysisStatus; message: string | null; fromCache: boolean };

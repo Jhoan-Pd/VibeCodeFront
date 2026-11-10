@@ -1,37 +1,33 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
-/** Combina clases de Tailwind resolviendo conflictos (patrón de shadcn/ui). */
+/** Joins Tailwind classes resolving conflicts (the shadcn/ui pattern). */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Configuración regional de toda la interfaz (fechas y números). */
+/** Locale of the whole interface (dates and numbers). */
 export const LOCALE = "es-CO";
 
-const fechaFormatter = new Intl.DateTimeFormat(LOCALE, {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+const dateTimeFormatter = new Intl.DateTimeFormat(LOCALE, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const dateFormatter = new Intl.DateTimeFormat(LOCALE);
+const numberFormatter = new Intl.NumberFormat(LOCALE);
 
-export function formatearFecha(fecha: Date | string): string {
-  return fechaFormatter.format(typeof fecha === "string" ? new Date(fecha) : fecha);
+const toDate = (value: Date | string) => (typeof value === "string" ? new Date(value) : value);
+
+/** Date and time, e.g. "08 nov 2026, 10:32". One shared Intl formatter instead of one per call. */
+export function formatDateTime(value: Date | string): string {
+  return dateTimeFormatter.format(toDate(value));
 }
 
-const numeroFormatter = new Intl.NumberFormat(LOCALE);
-const fechaSolaFormatter = new Intl.DateTimeFormat(LOCALE);
-
-/** 12000 → «12.000». Reutiliza un único Intl.NumberFormat en vez de crear uno por llamada. */
-export function formatearNumero(n: number): string {
-  return numeroFormatter.format(n);
+/** Date only (tables and the print view). */
+export function formatDate(value: Date | string): string {
+  return dateFormatter.format(toDate(value));
 }
 
-/** Solo la fecha (sin hora), p. ej. en tablas e impresión. */
-export function formatearFechaCorta(fecha: Date | string): string {
-  return fechaSolaFormatter.format(typeof fecha === "string" ? new Date(fecha) : fecha);
+/** 12000 → "12.000". */
+export function formatNumber(n: number): string {
+  return numberFormatter.format(n);
 }
 
 export function sleep(ms: number): Promise<void> {

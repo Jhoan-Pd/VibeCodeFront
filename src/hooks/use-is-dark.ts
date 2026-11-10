@@ -8,11 +8,11 @@ function subscribe(onChange: () => void) {
   return () => observer.disconnect();
 }
 
-/** true cuando <html> tiene la clase "dark" (Monaco y Mermaid cambian de tema con esto). */
+/** true when <html> has the "dark" class (Monaco and Mermaid switch themes with it). */
 export function useIsDark(): boolean {
   return useSyncExternalStore(
     subscribe,
     () => document.documentElement.classList.contains("dark"),
-    () => false, // en el servidor se asume el modo claro, que es el predeterminado
+    () => false, // the server assumes light mode, the default
   );
 }

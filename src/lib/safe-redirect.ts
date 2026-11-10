@@ -1,6 +1,6 @@
-/** Evita "open redirect": solo se aceptan rutas internas que empiecen por una sola "/". */
-export function rutaInternaSegura(valor: string | string[] | undefined, porDefecto = "/dashboard"): string {
-  const v = Array.isArray(valor) ? valor[0] : valor;
-  if (!v || !v.startsWith("/") || v.startsWith("//") || v.startsWith("/\\")) return porDefecto;
+/** Prevents open redirects: only internal paths that start with a single "/" are accepted. */
+export function safeInternalPath(value: string | string[] | undefined, fallback = "/dashboard"): string {
+  const v = Array.isArray(value) ? value[0] : value;
+  if (!v || !v.startsWith("/") || v.startsWith("//") || v.startsWith("/\\")) return fallback;
   return v;
 }

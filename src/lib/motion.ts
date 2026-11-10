@@ -1,10 +1,10 @@
 import type { CSSProperties } from "react";
 
 /**
- * Retraso escalonado para animaciones de entrada: el elemento `i` entra `pasoMs` después del anterior.
- * Se limita a 6 pasos para que una lista larga no tarde en aparecer. Módulo sin "use client":
- * se puede usar tanto en componentes de servidor como de cliente.
+ * Staggered delay for entrance animations: item `i` enters `stepMs` after the previous one, capped at
+ * six steps so a long list does not take long to appear. No "use client": usable from Server and Client
+ * Components alike.
  */
-export function retraso(i: number, pasoMs = 70): CSSProperties {
-  return { ["--vd-delay" as string]: `${Math.min(i, 6) * pasoMs}ms` } as CSSProperties;
+export function staggerDelay(i: number, stepMs = 70): CSSProperties {
+  return { ["--vd-delay" as string]: `${Math.min(i, 6) * stepMs}ms` } as CSSProperties;
 }
