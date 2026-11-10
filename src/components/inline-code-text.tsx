@@ -1,43 +1,43 @@
 import { Fragment, type ReactNode } from "react";
 
-/** Marcador interno para proteger el código mientras se busca la negrita (no aparece en texto normal). */
-const MARCA = "\u0000";
+/** Internal marker protecting code spans while bold is parsed (never appears in normal text). */
+const MARK = "\u0000";
 
 /**
- * Formato mínimo para el texto que devuelve el LLM: `código` se muestra como <code> y **negrita**
- * como <strong>. Se renderiza con nodos de React (no con innerHTML), así que todo lo que venga del
- * LLM queda escapado: no hay vía de inyección de HTML.
+ * Minimal formatting for the text the LLM returns: `code` becomes <code> and **bold** becomes <strong>.
+ * Rendered with React nodes (never innerHTML), so everything coming from the LLM is escaped: there is
+ * no HTML injection path.
  */
-export function TextoConCodigo({ texto }: { texto: string }) {
-  return <>{formatear(texto.replaceAll(MARCA, ""))}</>;
+export function InlineCodeText({ text }: { text: string }) {
+  return <>{format(text.replaceAll(MARK, ""))}</>;
 }
 
 /**
- * El código se aparta primero (así `2 ** i` no se confunde con negrita) y luego se aplica la
- * negrita, que puede contener código: **`fetch`** también funciona.
+ * Code is set aside first (so `2 ** i` is not mistaken for bold) and then bold is applied, which may
+ * contain code: **`fetch`** works too.
  */
-function formatear(texto: string): ReactNode[] {
-  const codigos: string[] = [];
-  const protegido = texto.replace(/`([^`]+)`/g, (_, c: string) => `${MARCA}${codigos.push(c) - 1}${MARCA}`);
+function format(text: string): ReactNode[] {
+  const snippets: string[] = [];
+  const protectedText = text.replace(/`([^`]+)`/g, (_, c: string) => `${MARK}${snippets.push(c) - 1}${MARK}`);
 
-  const conCodigo = (fragmento: string, base: string): ReactNode[] =>
-    fragmento.split(new RegExp(`${MARCA}(\\d+)${MARCA}`, "g")).map((p, i) =>
+  const withCode = (fragment: string, key: string): ReactNode[] =>
+    fragment.split(new RegExp(`${MARK}(\\d+)${MARK}`, "g")).map((p, i) =>
       i % 2 === 1 ? (
-        <code key={`${base}-${i}`} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-accent">
-          {codigos[Number(p)]}
+        <code key={`${key}-${i}`} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-accent">
+          {snippets[Number(p)]}
         </code>
       ) : (
-        <Fragment key={`${base}-${i}`}>{p}</Fragment>
+        <Fragment key={`${key}-${i}`}>{p}</Fragment>
       ),
     );
 
-  return protegido.split(/\*\*([^*\n]+)\*\*/g).map((p, i) =>
+  return protectedText.split(/\*\*([^*\n]+)\*\*/g).map((p, i) =>
     i % 2 === 1 ? (
       <strong key={i} className="font-semibold text-foreground">
-        {conCodigo(p, `b${i}`)}
+        {withCode(p, `b${i}`)}
       </strong>
     ) : (
-      <Fragment key={i}>{conCodigo(p, `t${i}`)}</Fragment>
+      <Fragment key={i}>{withCode(p, `t${i}`)}</Fragment>
     ),
   );
 }

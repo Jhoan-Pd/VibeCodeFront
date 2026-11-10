@@ -1,63 +1,58 @@
 import { Fragment } from "react";
-import { TextoConCodigo } from "@/components/texto-con-codigo";
+import { InlineCodeText } from "@/components/inline-code-text";
+
+const LIST_ITEM = /^\s*([-*•]|\d+[.)])\s+/;
 
 /**
- * Markdown MUY reducido para las respuestas del chat: bloques ``` de código, listas con guiones o
- * números, **negrita** y `código en línea`. Todo se construye con nodos de React (nunca innerHTML),
- * así que cualquier HTML que devuelva el LLM se muestra como texto y no se ejecuta.
+ * A VERY small Markdown subset for chat answers: ``` code blocks, dash or numbered lists, **bold** and
+ * `inline code`. Everything is built from React nodes (never innerHTML), so any HTML the LLM returns is
+ * shown as text and never runs.
  */
-export function TextoChat({ texto, animar = false }: { texto: string; animar?: boolean }) {
-  const partes = texto.split(/```[a-zA-Z0-9+#-]*\n?([\s\S]*?)```/g);
+export function ChatText({ text, animate = false }: { text: string; animate?: boolean }) {
+  const parts = text.split(/```[a-zA-Z0-9+#-]*\n?([\s\S]*?)```/g);
   return (
-    // `animar`: los párrafos, listas y bloques de código aparecen uno tras otro (respuestas nuevas).
-    <div className={animar ? "vd-partes space-y-2" : "space-y-2"}>
-      {partes.map((parte, i) =>
+    // `animate`: paragraphs, lists and code blocks appear one after another (new answers).
+    <div className={animate ? "vd-parts space-y-2" : "space-y-2"}>
+      {parts.map((part, i) =>
         i % 2 === 1 ? (
           <pre key={i} className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs leading-relaxed">
-            {parte.replace(/\n$/, "")}
+            {part.replace(/\n$/, "")}
           </pre>
         ) : (
-          <Fragment key={i}>{bloquesDeTexto(parte)}</Fragment>
+          <Fragment key={i}>{textBlocks(part)}</Fragment>
         ),
       )}
     </div>
   );
 }
 
-function bloquesDeTexto(texto: string) {
-  return texto
+function textBlocks(text: string) {
+  return text
     .split(/\n{2,}/)
     .map((b) => b.trim())
     .filter(Boolean)
-    .map((bloque, i) => {
-      const lineas = bloque.split("\n");
-      const esLista = lineas.every((l) => /^\s*([-*•]|\d+[.)])\s+/.test(l));
-      if (esLista) {
-        const ordenada = /^\s*\d/.test(lineas[0]);
-        const items = lineas.map((l, j) => (
-          <li key={j}>
-            <EnLinea texto={l.replace(/^\s*([-*•]|\d+[.)])\s+/, "")} />
-          </li>
-        ));
-        return ordenada ? (
-          <ol key={i} className="list-decimal space-y-1 pl-5">
-            {items}
-          </ol>
-        ) : (
-          <ul key={i} className="list-disc space-y-1 pl-5">
-            {items}
-          </ul>
+    .map((block, i) => {
+      const lines = block.split("\n");
+      if (!lines.every((l) => LIST_ITEM.test(l))) {
+        return (
+          <p key={i} className="whitespace-pre-line">
+            <InlineCodeText text={block} />
+          </p>
         );
       }
-      return (
-        <p key={i} className="whitespace-pre-line">
-          <EnLinea texto={bloque} />
-        </p>
+      const items = lines.map((l, j) => (
+        <li key={j}>
+          <InlineCodeText text={l.replace(LIST_ITEM, "")} />
+        </li>
+      ));
+      return /^\s*\d/.test(lines[0]) ? (
+        <ol key={i} className="list-decimal space-y-1 pl-5">
+          {items}
+        </ol>
+      ) : (
+        <ul key={i} className="list-disc space-y-1 pl-5">
+          {items}
+        </ul>
       );
     });
-}
-
-/** **negrita** + `código` en línea (TextoConCodigo ya entiende ambos). */
-function EnLinea({ texto }: { texto: string }) {
-  return <TextoConCodigo texto={texto} />;
 }

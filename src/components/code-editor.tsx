@@ -3,23 +3,24 @@
 import dynamic from "next/dynamic";
 import type { EditorProps } from "@monaco-editor/react";
 import { Skeleton } from "@/components/ui/misc";
+import { messages } from "@/i18n";
 
 /**
- * Monaco se carga solo en el cliente (usa `window`) y de forma diferida para no inflar el bundle inicial.
- * Los archivos del editor se sirven desde /monaco/vs (ver scripts/copy-monaco.mjs).
+ * Monaco loads only in the browser (it uses `window`) and lazily, so it stays out of the initial bundle.
+ * The editor files are served from /monaco/vs (see scripts/copy-monaco.mjs).
  */
 export const MonacoEditor = dynamic<EditorProps>(
   () =>
     import("@monaco-editor/react").then((m) => {
-      // Monaco se sirve desde /public/monaco (copiado en postinstall): sin CDN, funciona en redes restringidas.
-      // La URL debe ser ABSOLUTA: los web workers de Monaco se crean desde un blob: y no resuelven rutas relativas.
+      // Served from /public/monaco (copied on postinstall): no CDN, works on restricted networks.
+      // The URL must be ABSOLUTE: Monaco's web workers are created from a blob: and cannot resolve relative paths.
       m.loader.config({ paths: { vs: `${window.location.origin}/monaco/vs` } });
       return m.default;
     }),
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full flex-col gap-2 p-4" aria-label="Cargando editor">
+      <div className="flex h-full flex-col gap-2 p-4" aria-label={messages.viewer.loadingEditor}>
         {Array.from({ length: 8 }).map((_, i) => (
           <Skeleton key={i} className="h-4" style={{ width: `${40 + ((i * 17) % 50)}%` }} />
         ))}
@@ -28,8 +29,8 @@ export const MonacoEditor = dynamic<EditorProps>(
   },
 );
 
-/** Opciones comunes para el editor de solo lectura del visor. */
-export const OPCIONES_VISOR: NonNullable<EditorProps["options"]> = {
+/** Shared options of the viewer's read-only editor. */
+export const VIEWER_OPTIONS: NonNullable<EditorProps["options"]> = {
   readOnly: true,
   domReadOnly: true,
   minimap: { enabled: false },
@@ -51,8 +52,8 @@ export const OPCIONES_VISOR: NonNullable<EditorProps["options"]> = {
   scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
 };
 
-/** Opciones del editor editable (pantalla de nuevo análisis). */
-export const OPCIONES_EDITOR: NonNullable<EditorProps["options"]> = {
+/** Options of the editable editor (new analysis screen). */
+export const EDITOR_OPTIONS: NonNullable<EditorProps["options"]> = {
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
   fontSize: 13,

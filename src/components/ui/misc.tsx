@@ -8,7 +8,7 @@ export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivEl
 
 type AlertVariant = "info" | "error" | "success";
 
-const estilos: Record<AlertVariant, string> = {
+const STYLES: Record<AlertVariant, string> = {
   info: "border-primary/30 bg-primary/10 text-foreground",
   error: "border-destructive/40 bg-destructive/10 text-foreground",
   success: "border-emerald-500/40 bg-emerald-500/10 text-foreground",
@@ -25,10 +25,10 @@ export function Alert({
   children?: React.ReactNode;
   className?: string;
 }) {
-  const Icono = variant === "error" ? AlertTriangle : variant === "success" ? CheckCircle2 : Info;
+  const Icon = variant === "error" ? AlertTriangle : variant === "success" ? CheckCircle2 : Info;
   return (
-    <div role={variant === "error" ? "alert" : "status"} className={cn("flex gap-3 rounded-lg border p-4 text-sm", estilos[variant], className)}>
-      <Icono className={cn("mt-0.5 size-4 shrink-0", variant === "error" && "text-destructive", variant === "success" && "text-emerald-500", variant === "info" && "text-primary")} />
+    <div role={variant === "error" ? "alert" : "status"} className={cn("flex gap-3 rounded-lg border p-4 text-sm", STYLES[variant], className)}>
+      <Icon className={cn("mt-0.5 size-4 shrink-0", variant === "error" && "text-destructive", variant === "success" && "text-emerald-500", variant === "info" && "text-primary")} />
       <div className="space-y-1">
         {title && <p className="font-medium">{title}</p>}
         {children && <div className="text-muted-foreground">{children}</div>}
@@ -37,7 +37,7 @@ export function Alert({
   );
 }
 
-/** Pestañas simples y accesibles (sin dependencia extra). */
+/** Simple, accessible tabs (no extra dependency). */
 export function Tabs<T extends string>({
   value,
   onChange,

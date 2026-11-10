@@ -1,44 +1,34 @@
 "use client";
 
 import { BookMarked } from "lucide-react";
-import { RegenerarEtapa } from "@/components/regenerar-etapa";
-import { TextoConCodigo } from "@/components/texto-con-codigo";
+import { InlineCodeText } from "@/components/inline-code-text";
 import { Card, CardContent } from "@/components/ui/card";
-import type { ConceptoVista } from "@/schemas/vista";
-import { BotonLineas, type IrALineas } from "./boton-lineas";
-import { retraso } from "@/lib/movimiento";
+import { messages } from "@/i18n";
+import { staggerDelay } from "@/lib/motion";
+import type { ConceptView } from "@/types/analysis-view";
+import { LineRangeButton, type GoToLines } from "./line-range-button";
+import { MissingStage } from "./missing-stage";
 
-/** Glosario de conceptos usados en el código, cada uno con enlace a la línea donde aparece. */
-export function GlosarioPanel({ conceptos, irALineas, analisisId }: { conceptos: ConceptoVista[]; irALineas: IrALineas; analisisId?: string }) {
-  if (conceptos.length === 0) {
-    return (
-      <Card>
-        <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
-          <p>Todavía no hay glosario para este código.</p>
-          {analisisId && (
-            <RegenerarEtapa analisisId={analisisId} etapa="glosario">
-              Generar glosario
-            </RegenerarEtapa>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+const t = messages.viewer.glossary;
+
+/** Glossary of the concepts used by the code, each one linked to the lines where it appears. */
+export function GlossaryPanel({ concepts, goToLines, analysisId }: { concepts: ConceptView[]; goToLines: GoToLines; analysisId?: string }) {
+  if (concepts.length === 0) return <MissingStage message={t.missing} stage="glossary" action={t.generate} analysisId={analysisId} />;
   return (
-    <ul className="grid gap-3 md:grid-cols-2" aria-label="Glosario de conceptos">
-      {conceptos.map((c, i) => (
-        <li key={c.nombre} className="vd-card-enter" style={retraso(i, 50)}>
+    <ul className="grid gap-3 md:grid-cols-2" aria-label={t.ariaLabel}>
+      {concepts.map((c, i) => (
+        <li key={c.name} className="vd-card-enter" style={staggerDelay(i, 50)}>
           <Card className="h-full">
             <CardContent className="space-y-2 p-4">
               <div className="flex items-start justify-between gap-3">
                 <h3 className="flex items-center gap-2 text-sm font-semibold">
                   <BookMarked className="size-4 shrink-0 text-primary" />
-                  {c.nombre}
+                  {c.name}
                 </h3>
-                <BotonLineas inicio={c.lineaInicio} fin={c.lineaFin} irALineas={irALineas} />
+                <LineRangeButton start={c.lineStart} end={c.lineEnd} goToLines={goToLines} />
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                <TextoConCodigo texto={c.explicacion} />
+                <InlineCodeText text={c.explanation} />
               </p>
             </CardContent>
           </Card>

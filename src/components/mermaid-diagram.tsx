@@ -6,20 +6,19 @@ import { Check, Copy, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert, Skeleton, Spinner } from "@/components/ui/misc";
 import { useIsDark } from "@/hooks/use-is-dark";
-import type { TipoMermaid } from "@/lib/mermaid";
-import { pedirJson } from "@/lib/client/api";
+import { messages } from "@/i18n";
+import { rpc } from "@/lib/rpc/browser";
+import { attempt } from "@/lib/rpc/errors";
+import { toProtoDiagramKind } from "@/lib/rpc/mappers";
+import type { DiagramKind } from "@/types/analysis-view";
 
-const ETIQUETA: Record<TipoMermaid, string> = {
-  FLUJO: "Diagrama de flujo del código",
-  CLASES: "Diagrama de clases del código",
-  SECUENCIA: "Diagrama de secuencia del código",
-};
+const t = messages.viewer.diagrams;
 
-type Estado = "cargando" | "ok" | "error";
+type RenderState = "loading" | "ok" | "error";
 
-const FUENTE = '"Inter Variable", ui-sans-serif, system-ui, sans-serif';
-const TEMA_CLARO = {
-  fontFamily: FUENTE,
+const FONT = '"Inter Variable", ui-sans-serif, system-ui, sans-serif';
+const LIGHT_THEME = {
+  fontFamily: FONT,
   background: "#ffffff",
   primaryColor: "#e8edf8",
   primaryBorderColor: "#275fce",
@@ -31,8 +30,8 @@ const TEMA_CLARO = {
   noteBkgColor: "#fdf6e3",
   noteTextColor: "#16181d",
 };
-const TEMA_OSCURO = {
-  fontFamily: FUENTE,
+const DARK_THEME = {
+  fontFamily: FONT,
   darkMode: true,
   background: "#1d2026",
   primaryColor: "#1f2b45",
@@ -47,30 +46,30 @@ const TEMA_OSCURO = {
 };
 
 /**
- * Renderiza Mermaid en el cliente. Flujo de robustez:
- *  1) mermaid.parse() valida la sintaxis ANTES de dibujar,
- *  2) si falla, se muestra un mensaje amigable (nunca la "bomba" de error de Mermaid),
- *  3) si hay `analisisId`, el usuario puede pedirle al LLM que lo corrija (/api/analysis/:id/diagrama).
- * Seguridad: securityLevel "strict" => Mermaid sanea el SVG (DOMPurify) y deshabilita click/HTML.
+ * Renders Mermaid in the browser. Robustness flow:
+ *  1) mermaid.parse() validates the syntax BEFORE drawing,
+ *  2) when it fails, a friendly message is shown (never Mermaid's error "bomb"),
+ *  3) on the owner's analysis, the LLM can be asked to fix it (RepairDiagram).
+ * Security: securityLevel "strict" => Mermaid sanitises the SVG (DOMPurify) and disables click/HTML.
  */
-export function MermaidDiagram({ codigo, analisisId, tipo = "FLUJO" }: { codigo: string; analisisId?: string; tipo?: TipoMermaid }) {
+export function MermaidDiagram({ source: initialSource, analysisId, kind = "FLOW" }: { source: string; analysisId?: string; kind?: DiagramKind }) {
   const router = useRouter();
-  const oscuro = useIsDark();
-  const idBase = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const [fuente, setFuente] = useState(codigo);
+  const dark = useIsDark();
+  const baseId = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const [source, setSource] = useState(initialSource);
   const [svg, setSvg] = useState("");
-  const [estado, setEstado] = useState<Estado>("cargando");
-  const [errorParser, setErrorParser] = useState("");
-  const [reparando, setReparando] = useState(false);
-  const [errorReparar, setErrorReparar] = useState<string | null>(null);
-  const [copiado, setCopiado] = useState(false);
+  const [state, setState] = useState<RenderState>("loading");
+  const [parserError, setParserError] = useState("");
+  const [repairing, setRepairing] = useState(false);
+  const [repairError, setRepairError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Si el servidor entrega un diagrama distinto (tras router.refresh), se sincroniza.
-  useEffect(() => setFuente(codigo), [codigo]);
+  // When the server sends a different diagram (after router.refresh), follow it.
+  useEffect(() => setSource(initialSource), [initialSource]);
 
   useEffect(() => {
-    let cancelado = false;
-    setEstado("cargando");
+    let cancelled = false;
+    setState("loading");
 
     (async () => {
       try {
@@ -78,103 +77,98 @@ export function MermaidDiagram({ codigo, analisisId, tipo = "FLUJO" }: { codigo:
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: "strict",
-          // Tema "base" con la paleta de la app (tokens de globals.css) para que el diagrama no desentone.
+          // "base" theme with the app palette (globals.css tokens) so the diagram fits in.
           theme: "base",
-          themeVariables: oscuro ? TEMA_OSCURO : TEMA_CLARO,
+          themeVariables: dark ? DARK_THEME : LIGHT_THEME,
           suppressErrorRendering: true,
           flowchart: { htmlLabels: false, curve: "basis" },
           sequence: { useMaxWidth: true },
           class: { htmlLabels: false },
         });
-        await mermaid.parse(fuente); // lanza si la sintaxis es inválida
-        const { svg } = await mermaid.render(`mmd-${idBase}-${Date.now()}`, fuente);
-        if (cancelado) return;
+        await mermaid.parse(source); // throws on invalid syntax
+        const { svg } = await mermaid.render(`mmd-${baseId}-${Date.now()}`, source);
+        if (cancelled) return;
         setSvg(svg);
-        setEstado("ok");
+        setState("ok");
       } catch (e) {
-        if (cancelado) return;
-        setErrorParser(e instanceof Error ? e.message : String(e));
-        setEstado("error");
+        if (cancelled) return;
+        setParserError(e instanceof Error ? e.message : String(e));
+        setState("error");
       }
     })();
 
     return () => {
-      cancelado = true;
+      cancelled = true;
     };
-  }, [fuente, oscuro, idBase]);
+  }, [source, dark, baseId]);
 
-  async function repararConIA() {
-    if (!analisisId) return;
-    setReparando(true);
-    setErrorReparar(null);
-    const r = await pedirJson<{ mermaid: string }>(`/api/analysis/${analisisId}/diagrama`, {
-      cuerpo: { error: errorParser.slice(0, 1500), tipo },
-      errorPorDefecto: "No se pudo corregir el diagrama.",
-    });
-    setReparando(false);
-    if (!r.ok) {
-      setErrorReparar(r.error);
+  async function repairWithAi() {
+    if (!analysisId) return;
+    setRepairing(true);
+    setRepairError(null);
+    const r = await attempt(() => rpc.analysis.repairDiagram({ analysisId, kind: toProtoDiagramKind(kind), parserError: parserError.slice(0, 1500) }));
+    setRepairing(false);
+    if (!r.ok || !r.data.diagram) {
+      setRepairError((!r.ok && r.error) || t.repairFailed);
       return;
     }
-    setFuente(r.datos.mermaid);
+    setSource(r.data.diagram.mermaid);
     router.refresh();
   }
 
-  async function copiar() {
+  async function copy() {
     try {
-      await navigator.clipboard.writeText(fuente);
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 1500);
+      await navigator.clipboard.writeText(source);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
-      /* portapapeles no disponible */
+      /* clipboard unavailable */
     }
   }
 
   return (
     <div className="space-y-3">
-      {estado === "cargando" && (
-        <div className="space-y-3 p-6" aria-busy="true" aria-label="Dibujando diagrama">
+      {state === "loading" && (
+        <div className="space-y-3 p-6" aria-busy="true" aria-label={t.drawing}>
           <Skeleton className="mx-auto h-10 w-48" />
           <Skeleton className="mx-auto h-10 w-64" />
           <Skeleton className="mx-auto h-10 w-40" />
         </div>
       )}
 
-      {estado === "ok" && (
+      {state === "ok" && (
         <div
           className="mermaid-host overflow-auto rounded-md p-4"
           role="img"
-          aria-label={ETIQUETA[tipo]}
-          // El SVG lo genera Mermaid con securityLevel "strict" (sanea el contenido).
+          aria-label={t.ariaLabel[kind]}
+          // The SVG comes from Mermaid with securityLevel "strict" (sanitised content).
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       )}
 
-      {estado === "error" && (
-        <Alert variant="error" title="No pudimos dibujar este diagrama">
-          <p>La IA generó una sintaxis que Mermaid no acepta. Tu análisis y las explicaciones no se ven afectados.</p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {analisisId && (
-              <Button size="sm" onClick={repararConIA} disabled={reparando}>
-                {reparando ? <Spinner /> : <Wand2 />}
-                {reparando ? "Corrigiendo…" : "Corregir con IA"}
+      {state === "error" && (
+        <Alert variant="error" title={t.failedTitle}>
+          <p>{t.failedBody}</p>
+          {analysisId && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={repairWithAi} disabled={repairing}>
+                {repairing ? <Spinner /> : <Wand2 />}
+                {repairing ? t.repairing : t.repair}
               </Button>
-            )}
-          </div>
-          {errorReparar && <p className="mt-2 text-xs text-destructive">{errorReparar}</p>}
+            </div>
+          )}
+          {repairError && <p className="mt-2 text-xs text-destructive">{repairError}</p>}
         </Alert>
       )}
 
       <details className="rounded-md border bg-muted/40 text-sm print:hidden">
-        <summary className="cursor-pointer select-none px-3 py-2 text-muted-foreground">Ver código Mermaid</summary>
+        <summary className="cursor-pointer select-none px-3 py-2 text-muted-foreground">{t.showSource}</summary>
         <div className="relative border-t">
-          <Button variant="ghost" size="sm" className="absolute right-2 top-2" onClick={copiar}>
-            {copiado ? <Check className="vd-pulse" /> : <Copy />} {copiado ? "Copiado" : "Copiar"}
+          <Button variant="ghost" size="sm" className="absolute right-2 top-2" onClick={copy}>
+            {copied ? <Check className="vd-pulse" /> : <Copy />} {copied ? messages.common.copied : messages.common.copy}
           </Button>
-          <pre className="overflow-auto p-3 pr-24 font-mono text-xs leading-relaxed">{fuente}</pre>
-          {estado === "error" && errorParser && (
-            <pre className="overflow-auto border-t p-3 font-mono text-xs text-destructive">{errorParser.slice(0, 600)}</pre>
-          )}
+          <pre className="overflow-auto p-3 pr-24 font-mono text-xs leading-relaxed">{source}</pre>
+          {state === "error" && parserError && <pre className="overflow-auto border-t p-3 font-mono text-xs text-destructive">{parserError.slice(0, 600)}</pre>}
         </div>
       </details>
     </div>

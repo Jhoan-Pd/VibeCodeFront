@@ -2,82 +2,75 @@
 
 import type { MutableRefObject } from "react";
 import { MessageCircleQuestion } from "lucide-react";
-import { RegenerarEtapa } from "@/components/regenerar-etapa";
-import { TextoConCodigo } from "@/components/texto-con-codigo";
+import { InlineCodeText } from "@/components/inline-code-text";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import type { RangoLineas } from "@/lib/visor";
+import { messages } from "@/i18n";
 import { cn } from "@/lib/utils";
-import type { Bloque } from "@/schemas/analysis";
-import { etiquetaLineas } from "./boton-lineas";
+import type { LineSpan } from "@/lib/viewer";
+import type { Block } from "@/types/analysis-view";
+import { lineRangeLabel } from "./line-range-button";
+import { MissingStage } from "./missing-stage";
 
-export interface ExplicacionesPanelProps {
-  bloques: Bloque[];
-  activo: number | null;
-  onActivar: (i: number) => void;
-  /** Artículos del panel, para que el editor pueda desplazarlo hasta el bloque activo. */
+const t = messages.viewer.explanations;
+
+export interface ExplanationsPanelProps {
+  blocks: Block[];
+  active: number | null;
+  onActivate: (i: number) => void;
+  /** Panel items, so the editor can scroll the panel to the active block. */
   itemsRef: MutableRefObject<(HTMLElement | null)[]>;
-  /** Si se indica, cada bloque ofrece «Preguntar sobre estas líneas». */
-  onPreguntar?: (rango: RangoLineas) => void;
-  analisisId?: string;
+  /** When given, every block offers "Ask about these lines". */
+  onAsk?: (span: LineSpan) => void;
+  analysisId?: string;
   className?: string;
 }
 
-/** Lista de explicaciones por bloque, sincronizada con el editor. */
-export function ExplicacionesPanel({ bloques, activo, onActivar, itemsRef, onPreguntar, analisisId, className }: ExplicacionesPanelProps) {
-  if (bloques.length === 0) {
+/** List of block explanations, synchronised with the editor. */
+export function ExplanationsPanel({ blocks, active, onActivate, itemsRef, onAsk, analysisId, className }: ExplanationsPanelProps) {
+  if (blocks.length === 0) {
     return (
       <div className={className}>
-        <Card>
-          <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
-            <p>Todavía no hay explicación línea por línea para este código.</p>
-            {analisisId && (
-              <RegenerarEtapa analisisId={analisisId} etapa="lineas">
-                Generar explicación
-              </RegenerarEtapa>
-            )}
-          </CardContent>
-        </Card>
+        <MissingStage message={t.missing} stage="lines" action={t.generate} analysisId={analysisId} />
       </div>
     );
   }
 
   return (
-    <div className={cn("space-y-3", className)} aria-label="Explicaciones por bloque">
-      {bloques.map((b, i) => {
-        const esActivo = activo === i;
+    <div className={cn("space-y-3", className)} aria-label={t.ariaLabel}>
+      {blocks.map((b, i) => {
+        const isActive = active === i;
         return (
           <article
-            key={`${b.lineaInicio}-${i}`}
+            key={`${b.lineStart}-${i}`}
             ref={(el) => {
               itemsRef.current[i] = el;
             }}
             tabIndex={0}
-            aria-current={esActivo}
-            onMouseEnter={() => onActivar(i)}
-            onFocus={() => onActivar(i)}
-            onClick={() => onActivar(i)}
-            className={cn("cursor-default rounded-lg border bg-card p-4 transition-colors", esActivo ? "border-primary bg-primary/5 shadow-sm" : "hover:border-primary/40")}
+            aria-current={isActive}
+            onMouseEnter={() => onActivate(i)}
+            onFocus={() => onActivate(i)}
+            onClick={() => onActivate(i)}
+            className={cn("cursor-default rounded-lg border bg-card p-4 transition-colors", isActive ? "border-primary bg-primary/5 shadow-sm" : "hover:border-primary/40")}
           >
             <div className="mb-2 flex items-start justify-between gap-3">
-              <h4 className="text-sm font-semibold leading-snug">{b.titulo}</h4>
-              <Badge variant={esActivo ? "default" : "secondary"} className="shrink-0 font-mono">
-                {etiquetaLineas(b.lineaInicio, b.lineaFin)}
+              <h4 className="text-sm font-semibold leading-snug">{b.title}</h4>
+              <Badge variant={isActive ? "default" : "secondary"} className="shrink-0 font-mono">
+                {lineRangeLabel(b.lineStart, b.lineEnd)}
               </Badge>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              <TextoConCodigo texto={b.explicacion} />
+              <InlineCodeText text={b.explanation} />
             </p>
-            {onPreguntar && (
+            {onAsk && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onPreguntar({ inicio: b.lineaInicio, fin: b.lineaFin });
+                  onAsk({ start: b.lineStart, end: b.lineEnd });
                 }}
                 className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
               >
-                <MessageCircleQuestion className="size-3.5" /> Preguntar sobre estas líneas
+                <MessageCircleQuestion className="size-3.5" /> {t.ask}
               </button>
             )}
           </article>

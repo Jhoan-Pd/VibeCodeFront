@@ -2,149 +2,155 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { BookMarked, Code2, GitBranch, GraduationCap, MessageCircleQuestion, ShieldAlert } from "lucide-react";
-import { MonacoEditor, OPCIONES_VISOR } from "@/components/code-editor";
+import { MonacoEditor, VIEWER_OPTIONS } from "@/components/code-editor";
 import { Card } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/misc";
-import { AuditoriaPanel } from "@/components/viewer/auditoria-panel";
+import { AuditPanel } from "@/components/viewer/audit-panel";
 import { ChatPanel } from "@/components/viewer/chat-panel";
-import { DiagramasPanel } from "@/components/viewer/diagramas-panel";
-import { ExplicacionesPanel } from "@/components/viewer/explicaciones-panel";
-import { GlosarioPanel } from "@/components/viewer/glosario-panel";
+import { DiagramsPanel } from "@/components/viewer/diagrams-panel";
+import { ExplanationsPanel } from "@/components/viewer/explanations-panel";
+import { GlossaryPanel } from "@/components/viewer/glossary-panel";
 import { QuizPanel, type QuizPanelProps } from "@/components/viewer/quiz-panel";
-import { ResumenCard, ResumenFaltante } from "@/components/viewer/resumen-panel";
-import { useEditorSincronizado } from "@/components/viewer/use-editor-sincronizado";
+import { MissingSummary, SummaryCard } from "@/components/viewer/summary-panel";
+import { useSyncedEditor } from "@/components/viewer/use-synced-editor";
 import { useIsDark } from "@/hooks/use-is-dark";
+import { messages } from "@/i18n";
 import { languageLabel } from "@/lib/language";
 import { cn } from "@/lib/utils";
-import { contarLineas, type RangoLineas } from "@/lib/visor";
-import type { MensajeChatVista } from "@/schemas/chat";
-import type { AnalisisVista } from "@/schemas/vista";
+import { countLines, type LineSpan } from "@/lib/viewer";
+import type { AnalysisView, ChatMessageView } from "@/types/analysis-view";
+
+const t = messages.viewer;
 
 export interface AnalysisViewerProps {
-  datos: AnalisisVista;
-  /** Si se indica, se habilitan "Reintentar", "Corregir diagrama con IA" y el quiz calificado en el servidor. */
-  analisisId?: string;
-  /** false si la auditoría todavía no se ha ejecutado (para no mostrar "sin hallazgos" por error). */
-  auditado?: boolean;
-  /** Solo la demo: califica el quiz en el navegador. */
-  calificarLocal?: QuizPanelProps["calificarLocal"];
-  /** Vista pública de solo lectura: oculta el quiz y el chat. */
-  soloLectura?: boolean;
-  /** Conversación previa del chat contextual (solo análisis propios). */
-  mensajesChat?: MensajeChatVista[];
-  /** Rango a resaltar al abrir (enlaces "repasar" del dashboard de progreso: ?l=3-9). */
-  focoInicial?: { inicio: number; fin: number } | null;
+  view: AnalysisView;
+  /** When given: "Retry", "Fix diagram with AI" and server-graded quizzes are enabled. */
+  analysisId?: string;
+  /** false while the audit has not run (so "no findings" is never shown by mistake). */
+  audited?: boolean;
+  /** Demo only: grades the quiz in the browser. */
+  gradeLocally?: QuizPanelProps["gradeLocally"];
+  /** Public read-only view: hides the quiz and the chat. */
+  readOnly?: boolean;
+  /** Previous messages of the contextual chat (own analyses only). */
+  chatMessages?: ChatMessageView[];
+  /** Range to highlight on open (the "review" links of the progress dashboard: ?l=3-9). */
+  initialFocus?: LineSpan | null;
 }
 
-type Pestana = "codigo" | "diagramas" | "glosario" | "auditoria" | "quiz";
-type PanelDerecho = "explicacion" | "chat";
+type Tab = "code" | "diagrams" | "glossary" | "audit" | "quiz";
+type RightPanel = "explanation" | "chat";
 
-export function AnalysisViewer({ datos, analisisId, auditado = true, calificarLocal, soloLectura = false, mensajesChat = [], focoInicial = null }: AnalysisViewerProps) {
-  const { codigo, lenguaje, resumen, bloques, diagramas, conceptos, hallazgos, quiz } = datos;
-  const oscuro = useIsDark();
-  const [pestana, setPestana] = useState<Pestana>("codigo");
-  const [panel, setPanel] = useState<PanelDerecho>("explicacion");
-  const totalLineas = useMemo(() => contarLineas(codigo), [codigo]);
+/**
+ * The interactive viewer (a Client Component). The page renders the analysis on the server and hands it
+ * over as serialisable props; everything here is interaction: tabs, the synced editor, chat and quiz.
+ */
+export function AnalysisViewer({ view, analysisId, audited = true, gradeLocally, readOnly = false, chatMessages = [], initialFocus = null }: AnalysisViewerProps) {
+  const { code, language, summary, blocks, diagrams, concepts, findings, quiz } = view;
+  const dark = useIsDark();
+  const [tab, setTab] = useState<Tab>("code");
+  const [panel, setPanel] = useState<RightPanel>("explanation");
+  const lineCount = useMemo(() => countLines(code), [code]);
 
-  const mostrarCodigo = useCallback(() => setPestana("codigo"), []);
-  const editor = useEditorSincronizado({ bloques, totalLineas, focoInicial, alIrALineas: mostrarCodigo });
+  const showCode = useCallback(() => setTab("code"), []);
+  const editor = useSyncedEditor({ blocks, lineCount, initialFocus, onGoToLines: showCode });
 
-  const preguntarSobre = (rango: RangoLineas) => {
-    editor.setSeleccion(rango);
+  const askAbout = (span: LineSpan) => {
+    editor.setSelection(span);
     setPanel("chat");
   };
 
-  const pestanas = [
-    { id: "codigo" as const, label: <><Code2 className="size-4" /> Código y explicación</> },
-    { id: "diagramas" as const, label: <><GitBranch className="size-4" /> Diagramas{diagramas.length > 1 ? ` (${diagramas.length})` : ""}</> },
-    { id: "glosario" as const, label: <><BookMarked className="size-4" /> Glosario</> },
-    { id: "auditoria" as const, label: <><ShieldAlert className="size-4" /> Auditoría{hallazgos.length > 0 ? ` (${hallazgos.length})` : ""}</> },
-    ...(soloLectura ? [] : [{ id: "quiz" as const, label: <><GraduationCap className="size-4" /> Quiz</> }]),
+  const tabs = [
+    { id: "code" as const, label: <><Code2 className="size-4" /> {t.tabs.code}</> },
+    { id: "diagrams" as const, label: <><GitBranch className="size-4" /> {t.tabs.diagrams}{diagrams.length > 1 ? ` (${diagrams.length})` : ""}</> },
+    { id: "glossary" as const, label: <><BookMarked className="size-4" /> {t.tabs.glossary}</> },
+    { id: "audit" as const, label: <><ShieldAlert className="size-4" /> {t.tabs.audit}{findings.length > 0 ? ` (${findings.length})` : ""}</> },
+    ...(readOnly ? [] : [{ id: "quiz" as const, label: <><GraduationCap className="size-4" /> {t.tabs.quiz}</> }]),
   ];
 
   return (
     <div className="space-y-6">
-      {resumen ? <ResumenCard resumen={resumen} /> : <ResumenFaltante analisisId={analisisId} />}
+      {summary ? <SummaryCard summary={summary} /> : <MissingSummary analysisId={analysisId} />}
 
       <div className="space-y-4">
-        <Tabs value={pestana} onChange={setPestana} items={pestanas} />
+        <Tabs value={tab} onChange={setTab} items={tabs} />
 
-        {/* Se mantienen montados los dos paneles (con `hidden`) para no recargar Monaco al cambiar de pestaña. */}
-        <div ref={editor.contenedorRef} className={cn("vd-fade scroll-mt-20", pestana !== "codigo" && "hidden")}>
+        {/* Both panels stay mounted (with `hidden`) so Monaco does not reload when switching tabs. */}
+        <div ref={editor.containerRef} className={cn("vd-fade scroll-mt-20", tab !== "code" && "hidden")}>
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="overflow-hidden">
               <div className="flex items-center justify-between border-b px-4 py-2 text-xs text-muted-foreground">
-                <span className="font-mono">{languageLabel(lenguaje)}</span>
-                <span>{totalLineas} líneas</span>
+                <span className="font-mono">{languageLabel(language)}</span>
+                <span>{t.lines(lineCount)}</span>
               </div>
               <div className="h-[44vh] min-h-[320px] lg:h-[70vh]">
-                <MonacoEditor value={codigo} language={lenguaje} theme={oscuro ? "vs-dark" : "light"} options={OPCIONES_VISOR} onMount={editor.alMontar} />
+                <MonacoEditor value={code} language={language} theme={dark ? "vs-dark" : "light"} options={VIEWER_OPTIONS} onMount={editor.onMount} />
               </div>
             </Card>
 
             <div className="space-y-3">
-              {!soloLectura && (
+              {!readOnly && (
                 <Tabs
                   value={panel}
                   onChange={setPanel}
                   className="h-9"
                   items={[
-                    { id: "explicacion", label: <>Explicación</> },
-                    { id: "chat", label: <><MessageCircleQuestion className="size-4" /> Preguntar a la IA</> },
+                    { id: "explanation", label: <>{t.rightPanel.explanation}</> },
+                    { id: "chat", label: <><MessageCircleQuestion className="size-4" /> {t.rightPanel.chat}</> },
                   ]}
                 />
               )}
-              {panel === "chat" && !soloLectura ? (
+              {panel === "chat" && !readOnly ? (
                 <div className="h-[60vh] lg:h-[calc(70vh-11px)]">
                   <ChatPanel
-                    analisisId={analisisId}
-                    mensajesIniciales={mensajesChat}
-                    seleccion={editor.seleccion}
-                    limpiarSeleccion={() => editor.setSeleccion(null)}
-                    irALineas={editor.irALineas}
+                    analysisId={analysisId}
+                    initialMessages={chatMessages}
+                    selection={editor.selection}
+                    clearSelection={() => editor.setSelection(null)}
+                    goToLines={editor.goToLines}
                   />
                 </div>
               ) : (
-                <ExplicacionesPanel
-                  bloques={bloques}
-                  activo={editor.activo}
-                  onActivar={(i) => editor.activar(i, "panel")}
+                <ExplanationsPanel
+                  blocks={blocks}
+                  active={editor.active}
+                  onActivate={(i) => editor.activate(i, "panel")}
                   itemsRef={editor.itemsRef}
-                  onPreguntar={soloLectura ? undefined : preguntarSobre}
-                  analisisId={analisisId}
-                  className={cn("lg:overflow-y-auto lg:pr-1", soloLectura ? "lg:h-[calc(70vh+37px)]" : "lg:h-[calc(70vh-11px)]")}
+                  onAsk={readOnly ? undefined : askAbout}
+                  analysisId={analysisId}
+                  className={cn("lg:overflow-y-auto lg:pr-1", readOnly ? "lg:h-[calc(70vh+37px)]" : "lg:h-[calc(70vh-11px)]")}
                 />
               )}
             </div>
           </div>
-          {bloques.length > 0 && (
+          {blocks.length > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Pasa el mouse sobre una explicación para resaltar sus líneas en el editor, o sobre el código para ver su explicación.
-              {!soloLectura && " Selecciona líneas en el editor para preguntarle a la IA sobre ellas."}
+              {t.syncHint}
+              {!readOnly && t.selectHint}
             </p>
           )}
         </div>
 
-        <div className={cn("vd-fade", pestana !== "diagramas" && "hidden")}>
-          <DiagramasPanel diagramas={diagramas} analisisId={analisisId} />
+        <div className={cn("vd-fade", tab !== "diagrams" && "hidden")}>
+          <DiagramsPanel diagrams={diagrams} analysisId={analysisId} />
         </div>
 
-        {pestana === "glosario" && (
+        {tab === "glossary" && (
           <div className="vd-fade">
-            <GlosarioPanel conceptos={conceptos} irALineas={editor.irALineas} analisisId={analisisId} />
+            <GlossaryPanel concepts={concepts} goToLines={editor.goToLines} analysisId={analysisId} />
           </div>
         )}
 
-        {pestana === "auditoria" && (
+        {tab === "audit" && (
           <div className="vd-fade">
-            <AuditoriaPanel hallazgos={hallazgos} auditado={auditado} irALineas={editor.irALineas} analisisId={analisisId} />
+            <AuditPanel findings={findings} audited={audited} goToLines={editor.goToLines} analysisId={analysisId} />
           </div>
         )}
 
-        {/* El quiz se mantiene montado para no perder las respuestas al consultar el código. */}
-        {!soloLectura && (
-          <div className={cn("vd-fade", pestana !== "quiz" && "hidden")}>
-            <QuizPanel key={quiz?.id ?? "sin-quiz"} quiz={quiz} irALineas={editor.irALineas} analisisId={analisisId} calificarLocal={calificarLocal} />
+        {/* The quiz stays mounted so answers survive a look at the code. */}
+        {!readOnly && (
+          <div className={cn("vd-fade", tab !== "quiz" && "hidden")}>
+            <QuizPanel key={quiz?.id ?? "no-quiz"} quiz={quiz} goToLines={editor.goToLines} analysisId={analysisId} gradeLocally={gradeLocally} />
           </div>
         )}
       </div>

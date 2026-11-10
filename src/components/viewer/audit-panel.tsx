@@ -1,106 +1,83 @@
 "use client";
 
 import { Bug, FileX2, Ghost, ShieldAlert, ShieldCheck, TriangleAlert } from "lucide-react";
-import { RegenerarEtapa } from "@/components/regenerar-etapa";
-import { TextoConCodigo } from "@/components/texto-con-codigo";
+import { InlineCodeText } from "@/components/inline-code-text";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert } from "@/components/ui/misc";
-import { HALLAZGO_INFO, SEVERIDAD_INFO, type HallazgoVista, type Severidad, type TipoHallazgo } from "@/schemas/vista";
-import { BotonLineas, type IrALineas } from "./boton-lineas";
-import { retraso } from "@/lib/movimiento";
+import { messages } from "@/i18n";
+import { staggerDelay } from "@/lib/motion";
+import { SEVERITY_BADGE, SEVERITY_ORDER } from "@/lib/severity";
+import type { FindingKind, FindingView } from "@/types/analysis-view";
+import { LineRangeButton, type GoToLines } from "./line-range-button";
+import { MissingStage } from "./missing-stage";
 
-const ICONO: Record<TipoHallazgo, React.ComponentType<{ className?: string }>> = {
-  SEGURIDAD: ShieldAlert,
-  MALA_PRACTICA: TriangleAlert,
-  CODIGO_MUERTO: FileX2,
-  MANEJO_ERRORES: Bug,
-  ALUCINACION: Ghost,
+const t = messages.viewer.audit;
+const { labels } = messages;
+
+const ICON: Record<FindingKind, React.ComponentType<{ className?: string }>> = {
+  SECURITY: ShieldAlert,
+  BAD_PRACTICE: TriangleAlert,
+  DEAD_CODE: FileX2,
+  ERROR_HANDLING: Bug,
+  HALLUCINATION: Ghost,
 };
 
-const SEVERIDADES_UI: Severidad[] = ["CRITICA", "ALTA", "MEDIA", "BAJA"];
-
 /**
- * Auditoría de "vibe code". `auditado` distingue "sin hallazgos" (código limpio)
- * de "la auditoría aún no existe" (falló o es un análisis antiguo).
+ * "Vibe code" audit. `audited` tells "no findings" (clean code) apart from "the audit does not exist yet"
+ * (it failed, or the analysis is older than the audit stage).
  */
-export function AuditoriaPanel({
-  hallazgos,
-  auditado,
-  irALineas,
-  analisisId,
-}: {
-  hallazgos: HallazgoVista[];
-  auditado: boolean;
-  irALineas: IrALineas;
-  analisisId?: string;
-}) {
-  if (!auditado) {
-    return (
-      <Card>
-        <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
-          <p>La auditoría de este código todavía no está disponible.</p>
-          {analisisId && (
-            <RegenerarEtapa analisisId={analisisId} etapa="auditoria">
-              Auditar código
-            </RegenerarEtapa>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+export function AuditPanel({ findings, audited, goToLines, analysisId }: { findings: FindingView[]; audited: boolean; goToLines: GoToLines; analysisId?: string }) {
+  if (!audited) return <MissingStage message={t.missing} stage="audit" action={t.generate} analysisId={analysisId} />;
 
-  const conteo = SEVERIDADES_UI.map((s) => ({ s, n: hallazgos.filter((h) => h.severidad === s).length })).filter((x) => x.n > 0);
+  const counts = SEVERITY_ORDER.map((s) => ({ s, n: findings.filter((f) => f.severity === s).length })).filter((x) => x.n > 0);
 
   return (
     <div className="space-y-4">
-      {hallazgos.length === 0 ? (
-        <Alert variant="success" title="No encontramos problemas relevantes">
-          La IA no detectó riesgos de seguridad, código muerto ni APIs dudosas. Aun así, revisa el código antes de usarlo en producción.
+      {findings.length === 0 ? (
+        <Alert variant="success" title={t.cleanTitle}>
+          {t.cleanBody}
         </Alert>
       ) : (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">
-            {hallazgos.length} hallazgo{hallazgos.length === 1 ? "" : "s"}:
-          </span>
-          {conteo.map(({ s, n }) => (
-            <Badge key={s} variant={SEVERIDAD_INFO[s].variant}>
-              {n} {SEVERIDAD_INFO[s].label.toLowerCase()}
-              {n === 1 ? "" : "s"}
+          <span className="text-muted-foreground">{t.count(findings.length)}</span>
+          {counts.map(({ s, n }) => (
+            <Badge key={s} variant={SEVERITY_BADGE[s]}>
+              {t.severityCount(n, labels.severity[s])}
             </Badge>
           ))}
         </div>
       )}
 
-      <ul className="space-y-3" aria-label="Hallazgos de la auditoría">
-        {hallazgos.map((h, i) => {
-          const Icono = ICONO[h.tipo];
+      <ul className="space-y-3" aria-label={t.ariaLabel}>
+        {findings.map((f, i) => {
+          const Icon = ICON[f.kind];
           return (
-            <li key={`${h.titulo}-${i}`} className="vd-card-enter" style={retraso(i, 60)}>
-              <Card className={h.severidad === "CRITICA" ? "border-destructive/50" : undefined}>
+            <li key={`${f.title}-${i}`} className="vd-card-enter" style={staggerDelay(i, 60)}>
+              <Card className={f.severity === "CRITICAL" ? "border-destructive/50" : undefined}>
                 <CardContent className="space-y-3 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="flex min-w-0 items-start gap-2">
-                      <Icono className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0">
-                        <h3 className="text-sm font-semibold leading-snug">{h.titulo}</h3>
-                        <p className="text-xs text-muted-foreground">{HALLAZGO_INFO[h.tipo]}</p>
+                        <h3 className="text-sm font-semibold leading-snug">{f.title}</h3>
+                        <p className="text-xs text-muted-foreground">{labels.findingKind[f.kind]}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <BotonLineas inicio={h.lineaInicio} fin={h.lineaFin} irALineas={irALineas} />
-                      <Badge variant={SEVERIDAD_INFO[h.severidad].variant}>{SEVERIDAD_INFO[h.severidad].label}</Badge>
+                      <LineRangeButton start={f.lineStart} end={f.lineEnd} goToLines={goToLines} />
+                      <Badge variant={SEVERITY_BADGE[f.severity]}>{labels.severity[f.severity]}</Badge>
                     </div>
                   </div>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    <TextoConCodigo texto={h.descripcion} />
+                    <InlineCodeText text={f.description} />
                   </p>
                   <div className="rounded-md border bg-muted/40 p-3 text-sm">
                     <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      <ShieldCheck className="size-3.5" /> Sugerencia
+                      <ShieldCheck className="size-3.5" /> {t.suggestion}
                     </p>
                     <p className="leading-relaxed">
-                      <TextoConCodigo texto={h.sugerencia} />
+                      <InlineCodeText text={f.suggestion} />
                     </p>
                   </div>
                 </CardContent>
@@ -109,9 +86,7 @@ export function AuditoriaPanel({
           );
         })}
       </ul>
-      <p className="text-xs text-muted-foreground">
-        La auditoría la hace un modelo de IA: puede equivocarse o pasar por alto problemas. Úsala como guía, no como garantía.
-      </p>
+      <p className="text-xs text-muted-foreground">{t.disclaimer}</p>
     </div>
   );
 }

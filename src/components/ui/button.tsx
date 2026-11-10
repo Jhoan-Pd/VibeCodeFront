@@ -9,7 +9,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground shadow-btn hover:bg-primary-hover hover:shadow-btn-hover active:bg-primary-active active:shadow-none",
-        /** Botón oscuro (grafito): acciones de la barra de navegación. */
+        /** Dark (graphite) button: navigation bar actions. */
         contrast: "bg-contrast text-contrast-foreground shadow-contrast hover:bg-contrast-hover",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/70",
         outline: "border border-input bg-card hover:bg-secondary",

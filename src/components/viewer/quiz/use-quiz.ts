@@ -1,61 +1,68 @@
 "use client";
 
 import { useState } from "react";
-import { pedirJson } from "@/lib/client/api";
-import { contarSinResponder, respuestasIniciales, type Respuestas } from "@/lib/quiz-cliente";
-import type { RespuestaValor, ResultadoQuiz } from "@/schemas/quiz";
-import type { QuizVista } from "@/schemas/vista";
+import { create } from "@bufbuild/protobuf";
+import { SubmittedAnswerSchema } from "@/gen/vibedecoder/v1/quiz_pb";
+import { messages } from "@/i18n";
+import { countUnanswered, initialAnswers, type Answers } from "@/lib/quiz-ui";
+import { rpc } from "@/lib/rpc/browser";
+import { attempt } from "@/lib/rpc/errors";
+import { fromProtoQuizResult, toProtoAnswer } from "@/lib/rpc/mappers";
+import type { AnswerValue, QuizResult, QuizView } from "@/types/analysis-view";
 
-/** Cómo se califica: en el servidor (análisis propio) o en el navegador (demo de la landing). */
-export type Calificador = { tipo: "servidor"; analisisId: string } | { tipo: "local"; calificar: (r: Respuestas) => ResultadoQuiz } | { tipo: "ninguno" };
+/** How answers are graded: by the backend (own analysis) or in the browser (landing demo). */
+export type Grader = { kind: "server"; analysisId: string } | { kind: "local"; grade: (answers: Answers) => QuizResult } | { kind: "none" };
 
 /**
- * Estado del quiz (respuestas, resultado, envío y error) separado de la presentación.
- * El componente solo llama a `responder`, `enviar` y `reiniciar`.
+ * Quiz state (answers, result, submission and error) kept apart from the presentation.
+ * The component only calls `answer`, `submit` and `reset`.
  */
-export function useQuiz(quiz: QuizVista | null, calificador: Calificador) {
-  const preguntas = quiz?.preguntas ?? [];
-  const [respuestas, setRespuestas] = useState<Respuestas>(() => respuestasIniciales(preguntas));
-  const [resultado, setResultado] = useState<ResultadoQuiz | null>(null);
-  const [enviando, setEnviando] = useState(false);
+export function useQuiz(quiz: QuizView | null, grader: Grader) {
+  const questions = quiz?.questions ?? [];
+  const [answers, setAnswers] = useState<Answers>(() => initialAnswers(questions));
+  const [result, setResult] = useState<QuizResult | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function responder(preguntaId: string, valor: RespuestaValor) {
-    setRespuestas((prev) => ({ ...prev, [preguntaId]: valor }));
+  function answer(questionId: string, value: AnswerValue) {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
   }
 
-  async function enviar() {
+  async function submit() {
     if (!quiz) return;
     setError(null);
-    if (calificador.tipo === "local") {
-      setResultado(calificador.calificar(respuestas));
+    if (grader.kind === "local") {
+      setResult(grader.grade(answers));
       return;
     }
-    if (calificador.tipo === "ninguno") return;
-    setEnviando(true);
-    const r = await pedirJson<ResultadoQuiz>(`/api/analysis/${calificador.analisisId}/quiz`, {
-      cuerpo: { quizId: quiz.id, respuestas: preguntas.map((p) => ({ preguntaId: p.id, respuesta: respuestas[p.id] ?? null })) },
-      errorPorDefecto: "No se pudo calificar el quiz.",
-    });
-    setEnviando(false);
-    if (r.ok) setResultado(r.datos);
-    else setError(r.error);
+    if (grader.kind === "none") return;
+    setSubmitting(true);
+    const r = await attempt(() =>
+      rpc.quiz.submitAttempt({
+        analysisId: grader.analysisId,
+        quizId: quiz.id,
+        answers: questions.map((q) => create(SubmittedAnswerSchema, { questionId: q.id, answer: toProtoAnswer(answers[q.id] ?? null) })),
+      }),
+    );
+    setSubmitting(false);
+    if (r.ok && r.data.result) setResult(fromProtoQuizResult(r.data.result));
+    else setError((!r.ok && r.error) || messages.viewer.quiz.failed);
   }
 
-  function reiniciar() {
-    setResultado(null);
-    setRespuestas(respuestasIniciales(preguntas));
+  function reset() {
+    setResult(null);
+    setAnswers(initialAnswers(questions));
   }
 
   return {
-    respuestas,
-    resultado,
-    resultadoPorId: new Map(resultado?.resultados.map((r) => [r.preguntaId, r])),
-    sinResponder: contarSinResponder(preguntas, respuestas),
-    enviando,
+    answers,
+    result,
+    resultById: new Map(result?.results.map((r) => [r.questionId, r])),
+    unanswered: countUnanswered(questions, answers),
+    submitting,
     error,
-    responder,
-    enviar,
-    reiniciar,
+    answer,
+    submit,
+    reset,
   };
 }

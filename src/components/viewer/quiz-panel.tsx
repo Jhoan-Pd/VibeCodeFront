@@ -1,73 +1,58 @@
 "use client";
 
 import { Send } from "lucide-react";
-import { RegenerarEtapa } from "@/components/regenerar-etapa";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Alert, Spinner } from "@/components/ui/misc";
-import { textoFaltan, type Respuestas } from "@/lib/quiz-cliente";
-import type { ResultadoQuiz } from "@/schemas/quiz";
-import type { QuizVista } from "@/schemas/vista";
-import type { IrALineas } from "./boton-lineas";
-import { PreguntaQuiz } from "./quiz/pregunta-quiz";
-import { IntentosAnteriores, ResumenQuiz } from "./quiz/resumen-quiz";
-import { useQuiz, type Calificador } from "./quiz/use-quiz";
+import { messages } from "@/i18n";
+import type { Answers } from "@/lib/quiz-ui";
+import type { QuizResult, QuizView } from "@/types/analysis-view";
+import type { GoToLines } from "./line-range-button";
+import { MissingStage } from "./missing-stage";
+import { QuizQuestion } from "./quiz/quiz-question";
+import { PreviousAttempts, QuizSummary } from "./quiz/quiz-summary";
+import { useQuiz, type Grader } from "./quiz/use-quiz";
+
+const t = messages.viewer.quiz;
 
 export interface QuizPanelProps {
-  quiz: QuizVista | null;
-  irALineas: IrALineas;
-  /** Análisis propio: califica en el servidor y permite generar otro quiz. */
-  analisisId?: string;
-  /** Demo de la landing: califica en el navegador con las respuestas de ejemplo. */
-  calificarLocal?: (respuestas: Respuestas) => ResultadoQuiz;
+  quiz: QuizView | null;
+  goToLines: GoToLines;
+  /** Own analysis: graded by the backend, and another quiz can be generated. */
+  analysisId?: string;
+  /** Landing demo: graded in the browser with the sample answers. */
+  gradeLocally?: (answers: Answers) => QuizResult;
 }
 
-function calificadorDe({ analisisId, calificarLocal }: Pick<QuizPanelProps, "analisisId" | "calificarLocal">): Calificador {
-  if (calificarLocal) return { tipo: "local", calificar: calificarLocal };
-  if (analisisId) return { tipo: "servidor", analisisId };
-  return { tipo: "ninguno" };
+function graderFor({ analysisId, gradeLocally }: Pick<QuizPanelProps, "analysisId" | "gradeLocally">): Grader {
+  if (gradeLocally) return { kind: "local", grade: gradeLocally };
+  if (analysisId) return { kind: "server", analysisId };
+  return { kind: "none" };
 }
 
-/** Contenedor del quiz: el estado vive en useQuiz y cada parte visual en su propio componente. */
-export function QuizPanel({ quiz, irALineas, analisisId, calificarLocal }: QuizPanelProps) {
-  const q = useQuiz(quiz, calificadorDe({ analisisId, calificarLocal }));
+/** Quiz container: the state lives in useQuiz and every visual part in its own component. */
+export function QuizPanel({ quiz, goToLines, analysisId, gradeLocally }: QuizPanelProps) {
+  const q = useQuiz(quiz, graderFor({ analysisId, gradeLocally }));
 
-  if (!quiz || quiz.preguntas.length === 0) {
-    return (
-      <Card>
-        <CardContent className="space-y-3 p-6 text-sm text-muted-foreground">
-          <p>Todavía no hay quiz para este código.</p>
-          {analisisId && (
-            <RegenerarEtapa analisisId={analisisId} etapa="quiz">
-              Generar quiz
-            </RegenerarEtapa>
-          )}
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!quiz || quiz.questions.length === 0) return <MissingStage message={t.missing} stage="quiz" action={t.generate} analysisId={analysisId} />;
 
   return (
     <div className="space-y-4">
-      {q.resultado ? (
-        <ResumenQuiz resultado={q.resultado} irALineas={irALineas} onReintentar={q.reiniciar} analisisId={analisisId} />
+      {q.result ? (
+        <QuizSummary result={q.result} goToLines={goToLines} onRetry={q.reset} analysisId={analysisId} />
       ) : (
-        <p className="text-sm text-muted-foreground">
-          {quiz.preguntas.length} preguntas sobre este código. Puedes consultar las líneas antes de responder; al terminar verás la explicación de cada
-          respuesta.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.intro(quiz.questions.length)}</p>
       )}
 
       <ol className="space-y-3">
-        {quiz.preguntas.map((p, i) => (
-          <li key={p.id}>
-            <PreguntaQuiz
-              numero={i + 1}
-              pregunta={p}
-              respuesta={q.respuestas[p.id] ?? null}
-              resultado={q.resultadoPorId.get(p.id)}
-              onResponder={(valor) => q.responder(p.id, valor)}
-              irALineas={irALineas}
+        {quiz.questions.map((question, i) => (
+          <li key={question.id}>
+            <QuizQuestion
+              number={i + 1}
+              question={question}
+              answer={q.answers[question.id] ?? null}
+              result={q.resultById.get(question.id)}
+              onAnswer={(value) => q.answer(question.id, value)}
+              goToLines={goToLines}
             />
           </li>
         ))}
@@ -75,17 +60,17 @@ export function QuizPanel({ quiz, irALineas, analisisId, calificarLocal }: QuizP
 
       {q.error && <Alert variant="error">{q.error}</Alert>}
 
-      {!q.resultado && (
+      {!q.result && (
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={q.enviar} disabled={q.enviando || q.sinResponder > 0}>
-            {q.enviando ? <Spinner /> : <Send />}
-            {q.enviando ? "Calificando…" : "Enviar respuestas"}
+          <Button onClick={q.submit} disabled={q.submitting || q.unanswered > 0}>
+            {q.submitting ? <Spinner /> : <Send />}
+            {q.submitting ? t.grading : t.submit}
           </Button>
-          {q.sinResponder > 0 && <span className="text-xs text-muted-foreground">{textoFaltan(q.sinResponder)}</span>}
+          {q.unanswered > 0 && <span className="text-xs text-muted-foreground">{t.unanswered(q.unanswered)}</span>}
         </div>
       )}
 
-      {quiz.intentos.length > 0 && !calificarLocal && <IntentosAnteriores intentos={quiz.intentos} />}
+      {quiz.attempts.length > 0 && !gradeLocally && <PreviousAttempts attempts={quiz.attempts} />}
     </div>
   );
 }
