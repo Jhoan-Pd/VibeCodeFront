@@ -1,0 +1,56 @@
+export const auth = {
+  login: {
+    metaTitle: "Entrar",
+    title: "Bienvenido de vuelta",
+    description: "Entra para ver tu historial y analizar código nuevo.",
+    accountCreatedTitle: "Tu cuenta se creó",
+    accountCreatedBody: "Entra con tu correo y tu contraseña.",
+    submit: "Entrar",
+    noAccount: "¿No tienes cuenta?",
+    createOne: "Crea una",
+    wrongCredentials: "Correo o contraseña incorrectos.",
+    failed: "No se pudo iniciar sesión. Inténtalo de nuevo.",
+  },
+  register: {
+    metaTitle: "Crear cuenta",
+    title: "Crea tu cuenta",
+    description: "Gratis. Guarda tus análisis y sigue tu progreso.",
+    name: "Nombre",
+    nameRequired: "Escribe tu nombre.",
+    passwordHint: "Mínimo 8 caracteres.",
+    submit: "Crear cuenta",
+    failed: "No se pudo crear la cuenta.",
+    haveAccount: "¿Ya tienes cuenta?",
+    signIn: "Entra",
+  },
+  fields: { email: "Correo", password: "Contraseña" },
+  oauth: {
+    google: "Continuar con Google",
+    github: "Continuar con GitHub",
+    separator: "o con tu correo",
+  },
+  /** Messages for the errors Auth.js sends to /login?error=… (pages.error = "/login"). */
+  authJsError: {
+    Configuration:
+      "No pudimos iniciar sesión por un problema de configuración del servidor. Si administras la app, revisa que AUTH_SECRET, BACKEND_URL y BACKEND_JWT_SECRET estén definidas en Vercel (Settings → Environment Variables) y vuelve a desplegar.",
+    CredentialsSignin: "Correo o contraseña incorrectos.",
+    AccessDenied: "No tienes permiso para entrar con esa cuenta.",
+    EmailNotVerified:
+      "Ya hay una cuenta con ese correo y el proveedor no lo tiene verificado, así que no podemos unirlas. Entra con tu correo y contraseña, o verifica el correo en tu cuenta de Google o GitHub.",
+    BackendUnavailable: "El servidor no responde en este momento. Inténtalo de nuevo en unos minutos; tus análisis guardados no se pierden.",
+    OAuthFailed: "No se pudo entrar con Google o GitHub. Inténtalo de nuevo o entra con tu correo.",
+    Verification: "El enlace de acceso venció o ya se usó.",
+    default: "No se pudo iniciar sesión. Inténtalo de nuevo.",
+  },
+  email: {
+    required: "Escribe tu correo.",
+    spaces: "El correo no puede tener espacios.",
+    nonAscii: (chars: string, suggestion: string) => `El correo no puede tener tildes ni «ñ» (tiene ${chars}). ¿Quisiste decir ${suggestion}?`,
+    missingAt: "Al correo le falta la «@» (ejemplo: nombre@gmail.com).",
+    multipleAt: "El correo solo puede tener una «@».",
+    missingLocalPart: "Falta la parte antes de la «@».",
+    missingDomain: "Falta el dominio después de la «@» (ejemplo: gmail.com).",
+    tooLong: "El correo es demasiado largo.",
+    invalid: "Revisa el correo: debe tener la forma nombre@dominio.com.",
+  },
+} as const;
