@@ -1,6 +1,12 @@
 import { create } from "@bufbuild/protobuf";
 import { timestampDate, type Timestamp } from "@bufbuild/protobuf/wkt";
-import type { AnalysisDetail as AnalysisDetailMessage, AnalysisListItem as AnalysisListItemMessage, AnalysisView as AnalysisViewMessage } from "@/gen/vibedecoder/v1/analysis_pb";
+import {
+  StageStatus as ProtoStageStatus,
+  type AnalysisDetail as AnalysisDetailMessage,
+  type AnalysisListItem as AnalysisListItemMessage,
+  type AnalysisView as AnalysisViewMessage,
+  type AnalyzeResponse,
+} from "@/gen/vibedecoder/v1/analysis_pb";
 import { ChatRole, type ChatMessage } from "@/gen/vibedecoder/v1/chat_pb";
 import {
   AnalysisStatus as ProtoAnalysisStatus,
@@ -28,6 +34,7 @@ import {
   QUESTION_KINDS,
   SEVERITIES,
   type AnalysisDetail,
+  type AnalysisEvent,
   type AnalysisListItem,
   type AnalysisView,
   type AnswerValue,
@@ -190,6 +197,36 @@ export function fromProtoQuizResult(r: QuizResultMessage): QuizResult {
     })),
     review: r.review.map((item) => ({ lineStart: item.range?.start ?? 1, lineEnd: item.range?.end ?? item.range?.start ?? 1, concept: item.concept ?? null })),
   };
+}
+
+const STAGE_STATUS: Record<ProtoStageStatus, "running" | "done" | "failed" | null> = {
+  [ProtoStageStatus.UNSPECIFIED]: null,
+  [ProtoStageStatus.RUNNING]: "running",
+  [ProtoStageStatus.DONE]: "done",
+  [ProtoStageStatus.FAILED]: "failed",
+};
+
+/** One stream message → view event; null for events this client does not understand (newer backend). */
+export function fromProtoAnalyzeResponse(r: AnalyzeResponse): AnalysisEvent | null {
+  switch (r.event.case) {
+    case "started":
+      return { type: "started", analysisId: r.event.value.analysisId };
+    case "stage": {
+      const stage = fromProtoStage(r.event.value.stage);
+      const status = STAGE_STATUS[r.event.value.status];
+      return stage && status ? { type: "stage", stage, status, message: r.event.value.message ?? null } : null;
+    }
+    case "finished":
+      return {
+        type: "finished",
+        analysisId: r.event.value.analysisId,
+        status: fromEnum(ProtoAnalysisStatus, r.event.value.status, ANALYSIS_STATUSES, "FAILED"),
+        message: r.event.value.message ?? null,
+        fromCache: r.event.value.fromCache,
+      };
+    default:
+      return null;
+  }
 }
 
 export function fromProtoChatMessage(m: ChatMessage): ChatMessageView {

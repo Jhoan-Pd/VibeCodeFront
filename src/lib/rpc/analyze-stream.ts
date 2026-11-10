@@ -1,43 +1,34 @@
-import type { AnalysisEvent } from "@/lib/analysis-events";
+"use client";
 
-export interface AnalyzePayload {
-  codigo: string;
-  lenguaje: string;
-  nivel: string;
-  titulo?: string;
-  forzar?: boolean;
+import { create } from "@bufbuild/protobuf";
+import { AnalyzeRequestSchema } from "@/gen/vibedecoder/v1/analysis_pb";
+import type { AnalysisEvent, Level } from "@/types/analysis-view";
+import { rpc } from "./browser";
+import { fromProtoAnalyzeResponse, toProtoLevel } from "./mappers";
+
+export interface AnalyzeInput {
+  code: string;
+  /** A language id or "auto". */
+  language: string;
+  level: Level;
+  title?: string;
+  force?: boolean;
 }
 
 /**
- * Llama a /api/analyze y entrega cada evento NDJSON a `onEvent` a medida que llega.
- * Lanza Error con un mensaje legible si el servidor responde con un error HTTP.
+ * Runs the Analyze server stream and hands every event to `onEvent` as it arrives.
+ * Throws the ConnectError when the call fails (the caller turns it into a message).
  */
-export async function analizarConStream(payload: AnalyzePayload, onEvent: (e: AnalysisEvent) => void): Promise<void> {
-  const res = await fetch("/api/analyze", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
+export async function streamAnalysis(input: AnalyzeInput, onEvent: (e: AnalysisEvent) => void, signal?: AbortSignal): Promise<void> {
+  const request = create(AnalyzeRequestSchema, {
+    code: input.code,
+    language: input.language,
+    level: toProtoLevel(input.level),
+    title: input.title || undefined,
+    force: input.force ?? false,
   });
-
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `El servidor respondió ${res.status}`);
-  }
-  if (!res.body) throw new Error("El navegador no soporta streaming de respuestas.");
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let salto: number;
-    while ((salto = buffer.indexOf("\n")) >= 0) {
-      const linea = buffer.slice(0, salto).trim();
-      buffer = buffer.slice(salto + 1);
-      if (linea) onEvent(JSON.parse(linea) as AnalysisEvent);
-    }
+  for await (const message of rpc.analysis.analyze(request, { signal })) {
+    const event = fromProtoAnalyzeResponse(message);
+    if (event) onEvent(event);
   }
 }
