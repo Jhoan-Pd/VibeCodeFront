@@ -1,10 +1,10 @@
 "use client";
 
 import { AnalysisViewer } from "@/components/analysis-viewer";
-import { DEMO_PREGUNTAS, DEMO_VISTA } from "@/lib/demo";
-import { calificar } from "@/lib/quiz";
+import { DEMO_QUESTIONS, DEMO_VIEW } from "@/lib/demo/analysis";
+import { gradeDemoQuiz } from "@/lib/demo/quiz";
 
-/** Demo interactiva de la landing: datos precalculados, sin login y sin llamar al LLM. */
+/** Interactive demo of the landing page: pre-computed data, no account and no LLM call. */
 export function DemoViewer() {
-  return <AnalysisViewer datos={DEMO_VISTA} calificarLocal={(respuestas) => calificar(DEMO_PREGUNTAS, respuestas)} />;
+  return <AnalysisViewer view={DEMO_VIEW} gradeLocally={(answers) => gradeDemoQuiz(DEMO_QUESTIONS, answers)} />;
 }
