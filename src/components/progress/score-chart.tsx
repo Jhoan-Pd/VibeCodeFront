@@ -1,116 +1,124 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { messages } from "@/i18n";
 import { LOCALE } from "@/lib/utils";
 
-export interface PuntoEvolucion {
-  fecha: string;
-  porcentaje: number;
-  titulo: string;
+export interface ScorePoint {
+  attemptedAt: string;
+  scorePercent: number;
+  title: string;
 }
 
-const ALTO = 220;
-const M = { arriba: 16, derecha: 16, abajo: 28, izquierda: 48 };
-const fechaCorta = new Intl.DateTimeFormat(LOCALE, { day: "2-digit", month: "short" });
-const hora = new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "2-digit" });
+const t = messages.progress.chart;
+const HEIGHT = 220;
+const MARGIN = { top: 16, right: 16, bottom: 28, left: 48 };
+const shortDate = new Intl.DateTimeFormat(LOCALE, { day: "2-digit", month: "short" });
+const time = new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "2-digit" });
 
 /**
- * Evolución del puntaje del quiz (una sola serie: el título de la tarjeta la nombra, sin leyenda).
- * SVG a mano: línea de 2 px, marcadores de 8 px, rejilla tenue, una línea de referencia en el umbral
- * de aprobación y una guía vertical con tooltip al pasar el mouse (o al enfocar con el teclado).
+ * Quiz score over time (a single series: the card title names it, no legend).
+ * Hand-made SVG: 2 px line, 8 px markers, faint grid, a reference line at the pass mark and a vertical
+ * guide with a tooltip on hover (or keyboard focus).
  */
-export function GraficaEvolucion({ puntos, umbral }: { puntos: PuntoEvolucion[]; umbral: number }) {
+export function ScoreChart({ points, passMark }: { points: ScorePoint[]; passMark: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  // El ancho se mide en el navegador: hasta entonces se reserva el alto (evita desbordes en móvil).
-  const [medido, setMedido] = useState<number | null>(null);
-  const ancho = medido ?? 0;
-  const [activo, setActivo] = useState<number | null>(null);
+  // The width is measured in the browser: until then the height is reserved (no overflow on phones).
+  const [measured, setMeasured] = useState<number | null>(null);
+  const width = measured ?? 0;
+  const [active, setActive] = useState<number | null>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setMedido(Math.max(260, Math.round(e.contentRect.width))));
+    const ro = new ResizeObserver(([e]) => setMeasured(Math.max(260, Math.round(e.contentRect.width))));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const anchoUtil = ancho - M.izquierda - M.derecha;
-  const altoUtil = ALTO - M.arriba - M.abajo;
-  const x = (i: number) => M.izquierda + (puntos.length === 1 ? anchoUtil / 2 : (i / (puntos.length - 1)) * anchoUtil);
-  const y = (p: number) => M.arriba + (1 - p / 100) * altoUtil;
-  const ruta = puntos.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.porcentaje).toFixed(1)}`).join(" ");
+  const plotWidth = width - MARGIN.left - MARGIN.right;
+  const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
+  const x = (i: number) => MARGIN.left + (points.length === 1 ? plotWidth / 2 : (i / (points.length - 1)) * plotWidth);
+  const y = (p: number) => MARGIN.top + (1 - p / 100) * plotHeight;
+  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.scorePercent).toFixed(1)}`).join(" ");
 
-  // Etiquetas del eje X: primera, última y algunas intermedias sin chocar (~90 px entre etiquetas).
-  const paso = Math.max(1, Math.ceil(puntos.length / Math.max(2, Math.floor(anchoUtil / 90))));
-  const etiquetasX = puntos.map((_, i) => i).filter((i) => i === 0 || i === puntos.length - 1 || (i % paso === 0 && puntos.length - 1 - i >= paso / 2));
+  // X labels: first, last and a few in between without overlapping (~90 px apart).
+  const step = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(plotWidth / 90))));
+  const xLabels = points.map((_, i) => i).filter((i) => i === 0 || i === points.length - 1 || (i % step === 0 && points.length - 1 - i >= step / 2));
 
-  // Si todos los intentos son del mismo día, el eje X muestra la hora (si no, todas las etiquetas serían iguales).
-  const mismoDia = puntos.length > 1 && new Set(puntos.map((p) => fechaCorta.format(new Date(p.fecha)))).size === 1;
-  const etiquetaX = (f: string) => (mismoDia ? hora : fechaCorta).format(new Date(f));
+  // When every attempt is from the same day the X axis shows the time (otherwise all labels would match).
+  const sameDay = points.length > 1 && new Set(points.map((p) => shortDate.format(new Date(p.attemptedAt)))).size === 1;
+  const xLabel = (iso: string) => (sameDay ? time : shortDate).format(new Date(iso));
 
-  const masCercano = (clientX: number) => {
+  const nearest = (clientX: number) => {
     const rect = ref.current?.getBoundingClientRect();
-    if (!rect || puntos.length === 0) return null;
+    if (!rect || points.length === 0) return null;
     const px = clientX - rect.left;
-    let mejor = 0;
-    for (let i = 1; i < puntos.length; i++) if (Math.abs(x(i) - px) < Math.abs(x(mejor) - px)) mejor = i;
-    return mejor;
+    let best = 0;
+    for (let i = 1; i < points.length; i++) if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i;
+    return best;
   };
 
-  const a = activo != null ? puntos[activo] : null;
+  const a = active != null ? points[active] : null;
 
-  if (medido == null) return <div ref={ref} className="w-full" style={{ height: ALTO }} aria-hidden />;
+  if (measured == null) return <div ref={ref} className="w-full" style={{ height: HEIGHT }} aria-hidden />;
 
   return (
     <div ref={ref} className="relative w-full">
       <svg
-        width={ancho}
-        height={ALTO}
+        width={width}
+        height={HEIGHT}
         role="img"
-        aria-label={`Puntaje de tus últimos ${puntos.length} quizzes, de ${puntos[0]?.porcentaje ?? 0} % a ${puntos.at(-1)?.porcentaje ?? 0} %`}
+        aria-label={t.ariaLabel(points.length, points[0]?.scorePercent ?? 0, points.at(-1)?.scorePercent ?? 0)}
         className="block touch-none select-none"
-        onPointerMove={(e) => setActivo(masCercano(e.clientX))}
-        onPointerLeave={() => setActivo(null)}
+        onPointerMove={(e) => setActive(nearest(e.clientX))}
+        onPointerLeave={() => setActive(null)}
       >
-        {/* Rejilla tenue y eje Y */}
+        {/* Faint grid and Y axis */}
         {[0, 50, 100].map((v) => (
           <g key={v}>
-            <line x1={M.izquierda} x2={ancho - M.derecha} y1={y(v)} y2={y(v)} className="stroke-border" strokeWidth={1} />
-            <text x={M.izquierda - 8} y={y(v)} dy="0.32em" textAnchor="end" className="fill-muted-foreground text-[11px] tabular-nums">
+            <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(v)} y2={y(v)} className="stroke-border" strokeWidth={1} />
+            <text x={MARGIN.left - 8} y={y(v)} dy="0.32em" textAnchor="end" className="fill-muted-foreground text-[11px] tabular-nums">
               {v} %
             </text>
           </g>
         ))}
-        {/* Umbral de aprobación */}
-        <line x1={M.izquierda} x2={ancho - M.derecha} y1={y(umbral)} y2={y(umbral)} className="stroke-muted-foreground/60" strokeWidth={1} strokeDasharray="4 4" />
-        <text x={ancho - M.derecha} y={y(umbral) - 6} textAnchor="end" className="fill-muted-foreground text-[11px]">
-          aprobado ({umbral} %)
+        {/* Pass mark */}
+        <line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(passMark)} y2={y(passMark)} className="stroke-muted-foreground/60" strokeWidth={1} strokeDasharray="4 4" />
+        <text x={width - MARGIN.right} y={y(passMark) - 6} textAnchor="end" className="fill-muted-foreground text-[11px]">
+          {t.passMark(passMark)}
         </text>
 
-        {/* Guía vertical del punto activo */}
-        {a && <line x1={x(activo!)} x2={x(activo!)} y1={M.arriba} y2={ALTO - M.abajo} className="stroke-muted-foreground/50" strokeWidth={1} />}
+        {/* Vertical guide of the active point */}
+        {a && <line x1={x(active!)} x2={x(active!)} y1={MARGIN.top} y2={HEIGHT - MARGIN.bottom} className="stroke-muted-foreground/50" strokeWidth={1} />}
 
-        {/* Serie */}
-        {puntos.length > 1 && <path d={ruta} fill="none" className="stroke-primary" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
-        {puntos.map((p, i) => (
+        {/* Series */}
+        {points.length > 1 && <path d={path} fill="none" className="stroke-primary" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+        {points.map((p, i) => (
           <circle
             key={i}
             cx={x(i)}
-            cy={y(p.porcentaje)}
-            r={activo === i ? 5 : 4}
+            cy={y(p.scorePercent)}
+            r={active === i ? 5 : 4}
             className="fill-primary stroke-card"
             strokeWidth={2}
             tabIndex={0}
-            aria-label={`${fechaCorta.format(new Date(p.fecha))}: ${p.porcentaje} % en ${p.titulo}`}
-            onFocus={() => setActivo(i)}
-            onBlur={() => setActivo(null)}
+            aria-label={t.point(shortDate.format(new Date(p.attemptedAt)), p.scorePercent, p.title)}
+            onFocus={() => setActive(i)}
+            onBlur={() => setActive(null)}
           />
         ))}
 
-        {/* Eje X */}
-        {etiquetasX.map((i) => (
-          <text key={i} x={x(i)} y={ALTO - 8} textAnchor={i === 0 && puntos.length > 1 ? "start" : i === puntos.length - 1 && puntos.length > 1 ? "end" : "middle"} className="fill-muted-foreground text-[11px]">
-            {etiquetaX(puntos[i].fecha)}
+        {/* X axis */}
+        {xLabels.map((i) => (
+          <text
+            key={i}
+            x={x(i)}
+            y={HEIGHT - 8}
+            textAnchor={i === 0 && points.length > 1 ? "start" : i === points.length - 1 && points.length > 1 ? "end" : "middle"}
+            className="fill-muted-foreground text-[11px]"
+          >
+            {xLabel(points[i].attemptedAt)}
           </text>
         ))}
       </svg>
@@ -118,13 +126,13 @@ export function GraficaEvolucion({ puntos, umbral }: { puntos: PuntoEvolucion[];
       {a && (
         <div
           className="pointer-events-none absolute z-10 w-max max-w-[220px] -translate-x-1/2 -translate-y-full rounded-md border bg-card px-3 py-2 text-xs shadow-md"
-          style={{ left: Math.min(Math.max(x(activo!), 110), ancho - 110), top: y(a.porcentaje) - 10 }}
+          style={{ left: Math.min(Math.max(x(active!), 110), width - 110), top: y(a.scorePercent) - 10 }}
           role="status"
         >
-          <p className="font-semibold tabular-nums text-foreground">{a.porcentaje} %</p>
-          <p className="line-clamp-2 text-muted-foreground">{a.titulo}</p>
+          <p className="font-semibold tabular-nums text-foreground">{a.scorePercent} %</p>
+          <p className="line-clamp-2 text-muted-foreground">{a.title}</p>
           <p className="text-muted-foreground">
-            {fechaCorta.format(new Date(a.fecha))} · {hora.format(new Date(a.fecha))}
+            {shortDate.format(new Date(a.attemptedAt))} · {time.format(new Date(a.attemptedAt))}
           </p>
         </div>
       )}
