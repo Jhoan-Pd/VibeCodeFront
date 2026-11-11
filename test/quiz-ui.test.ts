@@ -24,7 +24,7 @@ describe("quiz UI logic", () => {
     expect(countUnanswered(questions, { ...answers, a: false, c: 0 })).toBe(0);
   });
 
-  it("the "unanswered" message agrees in number", () => {
+  it("the 'unanswered' message agrees in number", () => {
     expect(messages.viewer.quiz.unanswered(1)).toBe("Te falta 1 pregunta.");
     expect(messages.viewer.quiz.unanswered(3)).toBe("Te faltan 3 preguntas.");
   });

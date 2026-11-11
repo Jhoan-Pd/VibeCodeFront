@@ -11,7 +11,7 @@ describe("rpcErrorMessage", () => {
     expect(rpcErrorMessage(new ConnectError("Análisis no encontrado", Code.NotFound))).toBe("Análisis no encontrado");
   });
 
-  it("a network failure becomes "no connection"", () => {
+  it("a network failure becomes 'no connection'", () => {
     const e = new ConnectError("Failed to fetch", Code.Unknown, undefined, undefined, new TypeError("Failed to fetch"));
     expect(rpcErrorMessage(e)).toBe(messages.errors.noConnection);
   });
