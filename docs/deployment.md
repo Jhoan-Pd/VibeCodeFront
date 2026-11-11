@@ -1,155 +1,59 @@
-# Guía de despliegue: Gemini + Groq + Supabase (o Neon) + GitHub y Google OAuth + Vercel
+# Guía de despliegue del frontend (Vercel)
 
-Orden recomendado: 1) claves de IA, 2) base de datos, 3) probar en local, 4) GitHub (repo y OAuth), 5) Vercel.
+El frontend ya no habla con la base de datos ni con la IA: eso vive en el backend ([vibedecoder-backend](https://github.com/Jhoan-Pd/vibedecoder-backend), en Render). Despliega primero el backend y ten a mano su URL y su `BACKEND_JWT_SECRET`.
 
-## 1. API key gratuita de Gemini
+Orden: 1) backend en Render, 2) proyecto nuevo en Vercel, 3) OAuth, 4) probar, 5) keep-alive.
 
-1. Entra a https://aistudio.google.com/apikey con tu cuenta de Google.
-2. Pulsa **Create API key** (elige o crea un proyecto) y copia la clave.
-3. Pégala en `GEMINI_API_KEY`.
-4. El modelo se define en `GEMINI_MODEL`. Los nombres y las cuotas gratuitas cambian: en https://ai.google.dev/gemini-api/docs/models y en AI Studio (Rate limits) ves qué modelos tienes disponibles. Si la app responde que no encuentra el modelo o que superaste la cuota, cambia `GEMINI_MODEL` por otro modelo Flash o Flash-Lite disponible para ti.
+> Mientras el despliegue anterior siga en uso (por ejemplo, durante una presentación), crea un **proyecto nuevo** en Vercel para este repositorio. No reutilices el proyecto actual. Cambia el dominio solo cuando el nuevo esté probado.
 
-### Groq como respaldo (opcional, recomendado)
+## 1. Backend
 
-1. Entra a https://console.groq.com/keys, crea una cuenta gratuita y pulsa **Create API Key**.
-2. Pégala en `GROQ_API_KEY`. El modelo se define en `GROQ_MODEL` (por defecto `openai/gpt-oss-20b`); revisa los disponibles en https://console.groq.com/docs/models.
-3. Con las dos claves, si Gemini falla por cuota, caída, timeout o modelo inexistente, la misma petición se repite con Groq automáticamente. Para usar Groq como principal pon `LLM_PROVIDER="groq"`; para desactivar el respaldo, `LLM_FALLBACK="none"`.
+Sigue el README del backend: Blueprint de Render, `DATABASE_URL`/`DIRECT_URL` de Supabase, `GEMINI_API_KEY` y `BACKEND_JWT_SECRET`. Anota:
 
-## 2. Base de datos
+- la URL pública, por ejemplo `https://vibedecoder-backend.onrender.com`;
+- el valor de `BACKEND_JWT_SECRET` (mínimo 32 caracteres; `openssl rand -base64 48`).
 
-### Opción A: Supabase
+## 2. Vercel
 
-1. https://supabase.com → **New project**. Elige una región cercana y guarda la contraseña de la base de datos (si tiene caracteres especiales, codifícalos para la URL: `@` → `%40`, `#` → `%23`, `/` → `%2F`).
-2. Pulsa **Connect** y copia dos cadenas:
-   - **Transaction pooler** (puerto 6543) → `DATABASE_URL`, añadiendo al final `?sslmode=no-verify`.
-   - **Session pooler** (puerto 5432) → `DIRECT_URL`, añadiendo al final `?sslmode=require`.
-3. Usa el session pooler (no la conexión directa) para `DIRECT_URL`: la conexión directa de Supabase es solo IPv6 y falla en muchas redes.
-
-Nota sobre `sslmode=no-verify`: el driver `pg` valida el certificado y el del pooler de Supabase no está en el almacén público, por eso se desactiva la verificación en la conexión de la app. El tráfico sigue cifrado. Si prefieres verificar, descarga el certificado de Supabase (Database settings → SSL) y configúralo en el cliente.
-
-### Opción B: Neon
-
-1. https://neon.tech → crea un proyecto.
-2. En **Connection details** activa **Pooled connection**: esa URL (host con `-pooler`) va en `DATABASE_URL`; la URL sin pooler va en `DIRECT_URL`. Ambas con `?sslmode=require`.
-
-### Crear las tablas
-
-```powershell
-npx prisma db push
-```
-
-Comprueba en el panel de la BD (Table Editor / Tables) que existen las 12 tablas.
-
-Si ya habías creado las tablas con una versión anterior del proyecto, ejecuta `npx prisma db push` otra vez: las fases 2 y 3 añadieron columnas (`analisis.auditadoEn`, `analisis.origenCacheId`, `uso_diario.consultasIA`). Solo agrega columnas; no borra datos.
-
-## 3. Probar en local
-
-```powershell
-copy .env.example .env.local   # rellena DATABASE_URL, DIRECT_URL, AUTH_SECRET, GEMINI_API_KEY
-npm install
-npm run dev
-```
-
-1. Crea una cuenta en `/register`, entra a `/analyze`, pega un fragmento y pulsa **Analizar código**.
-2. Esta es la primera prueba contra Gemini real: si falla, el mensaje te dirá si es clave, cuota o modelo.
-
-## 4. GitHub: repositorio y OAuth
-
-### Repositorio
-
-```powershell
-git init
-git add .
-git commit -m "VibeDecoder fase 1"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/vibedecoder.git
-git push -u origin main
-```
-
-Crea antes el repositorio vacío en https://github.com/new. `.env.local` está en `.gitignore`: nunca subas claves.
-
-### OAuth App (login con GitHub)
-
-GitHub → Settings → Developer settings → OAuth Apps → **New OAuth App**. Una OAuth App solo admite una URL de callback, así que crea dos: una para local y otra para producción.
-
-| | Local | Producción |
-|---|---|---|
-| Homepage URL | `http://localhost:3000` | `https://TU-APP.vercel.app` |
-| Authorization callback URL | `http://localhost:3000/api/auth/callback/github` | `https://TU-APP.vercel.app/api/auth/callback/github` |
-
-Genera un **Client secret** en cada una. Local: `AUTH_GITHUB_ID` y `AUTH_GITHUB_SECRET` en `.env.local`. Producción: en Vercel.
-
-### Login con Google (OAuth 2.0)
-
-1. Ve a https://console.cloud.google.com, crea un proyecto (por ejemplo «VibeDecoder») y ábrelo.
-2. **APIs y servicios → Pantalla de consentimiento de OAuth** (o «Google Auth Platform → Branding»):
-   - Tipo de usuario: **Externo**.
-   - Nombre de la app, correo de soporte y correo de contacto del desarrollador.
-   - Permisos: los básicos (`openid`, `email`, `profile`). No hace falta enviar la app a verificación.
-   - Mientras esté en modo **Prueba**, solo pueden entrar los correos que agregues en **Usuarios de prueba**. Para abrirla a cualquiera, pulsa **Publicar app**.
-3. **Credenciales → Crear credenciales → ID de cliente de OAuth**, tipo **Aplicación web**:
-
-| Campo | Valores |
-|---|---|
-| Orígenes autorizados de JavaScript | `http://localhost:3000` y `https://TU-APP.vercel.app` |
-| URI de redireccionamiento autorizados | `http://localhost:3000/api/auth/callback/google` y `https://TU-APP.vercel.app/api/auth/callback/google` |
-
-   A diferencia de GitHub, un mismo cliente de Google admite varias URL, así que basta con uno.
-4. Copia el **ID de cliente** en `AUTH_GOOGLE_ID` y el **Secreto del cliente** en `AUTH_GOOGLE_SECRET` (en `.env.local` y en Vercel).
-5. Ejecuta `npx prisma db push` una vez: crea la tabla `cuentas_oauth`, donde se guardan los vínculos con Google y GitHub.
-
-Sin `AUTH_GOOGLE_ID`, el botón «Continuar con Google» no aparece. Si alguien ya tenía cuenta con ese correo, se vincula solo si Google lo verificó.
-
-## 5. Vercel
-
-1. https://vercel.com → entra con GitHub → **Add New… → Project** → importa el repositorio.
-2. Framework: Next.js (se detecta solo). No cambies los comandos.
-3. En **Environment Variables** agrega:
+1. **Add New → Project** e importa este repositorio. Framework: Next.js (se detecta solo).
+2. Variables de entorno (Production y Preview):
 
 | Variable | Valor |
 |---|---|
-| `DATABASE_URL` | URL del pooler (con `?sslmode=no-verify` en Supabase) |
-| `DIRECT_URL` | URL de session pooler / directa |
-| `AUTH_SECRET` | resultado de `npx auth secret` |
-| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | de la OAuth App **de producción** |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | del cliente OAuth de Google (opcional) |
-| `GEMINI_API_KEY` | tu clave |
-| `GEMINI_MODEL` | el modelo que te funcionó en local |
-| `GROQ_API_KEY` | tu clave de Groq (opcional, respaldo) |
-| `GROQ_MODEL` | `openai/gpt-oss-20b` u otro disponible |
-| `LLM_PROVIDER` | `gemini` |
-| `DAILY_ANALYSIS_LIMIT` / `DAILY_AI_QUERIES_LIMIT` | opcionales: `10` y `60` por defecto |
+| `BACKEND_URL` | URL del backend (la usa el servidor de Next) |
+| `NEXT_PUBLIC_BACKEND_URL` | La misma URL (la usa el navegador; se incrusta al compilar) |
+| `BACKEND_JWT_SECRET` | **El mismo valor** que en Render |
+| `AUTH_SECRET` | `npx auth secret` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Opcional (paso 3) |
+| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | Opcional (paso 3) |
+| `NEXT_PUBLIC_MAX_CODE_CHARS`, `NEXT_PUBLIC_DAILY_ANALYSIS_LIMIT` | Opcional: los mismos límites que el backend, para mostrarlos en la interfaz |
 
-4. Pulsa **Deploy**. Cuando termine tendrás la URL `https://TU-APP.vercel.app`.
-5. Crea la OAuth App de producción con esa URL (paso 4) y actualiza `AUTH_GITHUB_ID` y `AUTH_GITHUB_SECRET` en Vercel (Settings → Environment Variables), luego **Redeploy**.
-6. Región: en Settings → Functions elige una región cercana a tu base de datos para reducir latencia.
-7. `vercel.json` programa un **cron diario** a `/api/salud`, que hace una consulta mínima a la base de datos. Supabase pausa los proyectos gratuitos sin actividad; con esta consulta diaria el proyecto no se pausa. Puedes verlo en Settings → Cron Jobs.
+3. Despliega y copia la URL (por ejemplo `https://vibedecoder.vercel.app`).
+4. En Render, agrega esa URL a `ALLOWED_ORIGINS` del backend (separa varias con comas, sin `/` final). Sin esto el navegador no puede llamar a la API (CORS).
 
-### Verificación en producción
+## 3. Google y GitHub (opcional)
 
-- La landing y la demo cargan sin iniciar sesión.
-- Registro y login por correo funcionan.
-- Un análisis nuevo termina y aparece en el historial.
-- Login con GitHub y con Google funcionan.
-- `https://TU-APP.vercel.app/api/salud` responde `{"ok":true,"bd":"ok"}`.
-- El quiz se califica, la pregunta aparece en **Progreso** y el chat responde.
-- **Markdown** descarga un `.md`, **PDF** abre la vista para imprimir y **Compartir** crea un enlace que abre en una ventana privada sin iniciar sesión.
+- **Google** (console.cloud.google.com → Credenciales → ID de cliente de OAuth, «Aplicación web»). URI de redirección: `https://TU-APP.vercel.app/api/auth/callback/google`. Para desarrollo, `http://localhost:3000/api/auth/callback/google`.
+- **GitHub** (Settings → Developer settings → OAuth Apps). Callback: `https://TU-APP.vercel.app/api/auth/callback/github`.
 
-### Problemas frecuentes
+Sin las claves, el botón correspondiente no aparece.
 
-| Síntoma | Causa y solución |
+## 4. Probar
+
+- `https://TU-APP.vercel.app/api/health` debe responder `{"ok":true,"backend":{"status":"ok","database":"ok",…}}`.
+- La primera petición después de un rato sin uso tarda unos 50 s: el plan gratis de Render duerme el servicio.
+- Crea una cuenta, analiza un código y comparte el enlace.
+
+Errores comunes:
+
+| Síntoma | Causa |
 |---|---|
-| `self-signed certificate in certificate chain` | Falta `?sslmode=no-verify` en `DATABASE_URL` (Supabase). |
-| `prisma db push` se cuelga o da timeout | Estás usando la conexión directa (IPv6). Usa el session pooler. |
-| Errores de *prepared statement* | Usa el session pooler (5432) también en `DATABASE_URL`. |
-| Login con GitHub: `redirect_uri_mismatch` | La callback de la OAuth App no coincide exactamente con la URL del sitio. |
-| `Configuration` / `MissingSecret` | Falta `AUTH_SECRET` en Vercel. |
-| `(ENOTFOUND) tenant/user postgres.… not found` en los logs, o «La base de datos no responde» en la app | Supabase **pausó** el proyecto por inactividad. En el dashboard de Supabase abre el proyecto y pulsa **Resume project**. El cron diario de `/api/salud` evita que vuelva a pasar. |
-| Login con Google: `redirect_uri_mismatch` | Falta `https://TU-APP.vercel.app/api/auth/callback/google` en las URI de redireccionamiento del cliente de Google. |
-| Login con Google: «acceso bloqueado» o «app no verificada» | La pantalla de consentimiento está en modo Prueba y tu correo no está en **Usuarios de prueba**, o falta **Publicar app**. |
-| El análisis dice «límite gratuito» | Se agotó la cuota por minuto o día de Gemini: espera, cambia `GEMINI_MODEL` o configura `GROQ_API_KEY` como respaldo. |
-| «Llegaste al límite de N análisis por día» | Es el límite propio de la app: sube `DAILY_ANALYSIS_LIMIT` o espera al día siguiente (zona `APP_TIMEZONE`). |
-| `prisma db push`: `Connection url is empty` | La CLI no encontró `DIRECT_URL`/`DATABASE_URL`. Deben estar en `.env.local` o `.env` en la raíz del proyecto (`prisma.config.ts` carga ambos). |
-| Error `column ... does not exist` | La BD es de una versión anterior: ejecuta `npx prisma db push`. |
-| El enlace público muestra «no encontrado» | El análisis se borró o se dejó de compartir; crea un enlace nuevo. |
-| El análisis tarda más de 60 s | Reduce el código o baja `LLM_CHUNK_LINES`; las rutas tienen `maxDuration = 60`. |
+| «No autorizado. Inicia sesión.» en todas las acciones | `BACKEND_JWT_SECRET` distinto en Vercel y Render |
+| El navegador muestra «No hay conexión con el servidor» | Falta la URL del frontend en `ALLOWED_ORIGINS`, o `NEXT_PUBLIC_BACKEND_URL` es incorrecta (vuelve a desplegar después de cambiarla: se incrusta al compilar) |
+| `/login?error=Configuration` | Falta `AUTH_SECRET`, `BACKEND_URL` o `BACKEND_JWT_SECRET` |
+
+## 5. Mantener los servicios activos
+
+- `vercel.json` programa un cron diario a `/api/health`.
+- En GitHub (Settings → Secrets and variables → Actions → Variables), crea `FRONTEND_URL` con la URL de Vercel para el workflow `keep-alive.yml`.
+- GitHub desactiva los workflows programados tras 60 días sin commits. Si pasa, reactívalo en la pestaña **Actions**.
